@@ -1,0 +1,47 @@
+name: Build signed release candidate
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release-candidate:
+    runs-on: ubuntu-latest
+    environment: agentic-release
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.22.2"
+          cache: npm
+          cache-dependency-path: openclaw/reman-agentic/package-lock.json
+      - name: Require GitHub-verified signed annotated tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -eu
+          tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG_NAME" --jq .object.sha)
+          verified=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_sha" --jq .verification.verified)
+          test "$verified" = "true"
+      - name: Verify source and packages
+        run: ./scripts/verify-release.sh
+      - name: Build release artifacts
+        run: |
+          set -eu
+          mkdir -p release
+          (cd openclaw/reman-agentic && npm pack --pack-destination "$GITHUB_WORKSPACE/release" --json)
+          tar -czf "release/remanager-hermes-agentic-${GITHUB_REF_NAME}.tar.gz" -C hermes reman-agentic
+          (cd release && sha256sum ./*.tgz "remanager-hermes-agentic-${GITHUB_REF_NAME}.tar.gz" > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: remanager-agentic-${{ github.ref_name }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 14

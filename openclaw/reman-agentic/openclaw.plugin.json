@@ -1,0 +1,55 @@
+{
+  "id": "reman-agentic",
+  "name": "REmanager Agentic",
+  "description": "Governed REmanager Accounting read tools for a user-delegated OpenClaw agent.",
+  "version": "1.0.0",
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "reman_available_tools",
+      "reman_accounting_read",
+      "reman_accounting_list_companies",
+      "reman_accounting_search_partners",
+      "reman_accounting_search_non_electronic_invoices"
+    ]
+  },
+  "skills": ["./skills"],
+  "uiHints": {
+    "baseUrl": {
+      "label": "REmanager URL",
+      "help": "Public HTTPS base URL of the REmanager deployment.",
+      "placeholder": "https://app.example.com"
+    },
+    "token": {
+      "label": "Agent token",
+      "help": "Scoped one-time token created under Account > Connected agents.",
+      "sensitive": true
+    },
+    "timeoutSeconds": {
+      "label": "Request timeout",
+      "help": "HTTPS request timeout in seconds.",
+      "advanced": true
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "baseUrl": {
+        "type": "string",
+        "minLength": 1
+      },
+      "token": {
+        "type": ["string", "object"]
+      },
+      "timeoutSeconds": {
+        "type": "number",
+        "minimum": 5,
+        "maximum": 120,
+        "default": 30
+      }
+    }
+  }
+}

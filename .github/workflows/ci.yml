@@ -1,0 +1,24 @@
+name: Connector CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.22.2"
+          cache: npm
+          cache-dependency-path: openclaw/reman-agentic/package-lock.json
+      - name: Verify connector source
+        env:
+          REMAN_SOURCE_CI_ALLOW_DOCUMENTED_OPENCLAW_P2: "1"
+        run: ./scripts/verify-release.sh
