@@ -1,54 +1,41 @@
 # REman Agentic plugin for Hermes
 
-This plugin exposes the REmanager Accounting read tools granted to a connected Hermes agent through the Core Agentic REST gateway. Discovery is authoritative: the generic read adapter can invoke only discovered `accounting.*` tools in mode `read`. It does not use browser automation, user cookies, passwords, database access, storage paths, or provider API keys.
+This Hermes directory plugin exposes only the REmanager Accounting read tools granted to one user-delegated external agent. Discovery is authoritative: model-facing calls can invoke only discovered `accounting.*` tools in mode `read`.
 
-> Security status: source-only repository bootstrap is authorized, but connector distribution, releases and real tokens are not. Only Accounting read-only staging tests with synthetic identities and minimum grants are approved. File-based invoice creation remains unavailable pending the Core race retest and a separate Security gate.
+The plugin contains no create, upload, mutation, `direct`, MCP, browser automation, user-session, database, storage, or provider-key integration. User, team and agent identity always come from the REmanager token context and cannot be supplied by the model.
 
-## Install
+> Security status: this source is a release candidate for an independent Hermes closure. Do not publish or distribute it, configure real tokens, or enable Agentic in production until Security/AppSec explicitly approves the exact candidate checksum and provenance.
 
-1. In REman, open **Account > Agenti collegati**, create an agent with provider `hermes`, configure its grants and create a token.
-2. Install the official Git release subdirectory with `hermes plugins install <official-owner>/<official-repository>/hermes/reman-agentic`, or run `./install.sh` from a verified local checkout.
-3. Put these values in the Hermes environment (normally `~/.hermes/.env`):
+## Format and installation
 
-   ```dotenv
-   REMAN_AGENT_BASE_URL=https://reman.example.com
-   REMAN_AGENT_TOKEN=<one-time token shown by REman>
-   ```
+The archive uses Hermes' supported directory-plugin format: one `reman-agentic/` directory containing `plugin.yaml`, `__init__.py`, handlers, schemas and the bundled skill. General plugins are opt-in.
 
-4. Enable the opt-in plugin with `hermes plugins enable reman-agentic` and restart the Hermes process.
+After an approved release:
 
-The plugin also registers the governed Accounting workflow as `reman-agentic:reman-accounting`. Hermes can load it with `skill_view("reman-agentic:reman-accounting")`; the discovery tool description directs the model to it before complex Accounting work.
+1. Verify the archive SHA-256 and file manifest.
+2. Extract the `reman-agentic/` directory from the official artifact.
+3. Run `./install.sh` from that verified directory, or place it at `~/.hermes/plugins/reman-agentic`.
+4. Configure `REMAN_AGENT_BASE_URL` and `REMAN_AGENT_TOKEN` in the trusted Hermes process environment.
+5. Run `hermes plugins enable reman-agentic` and restart Hermes.
 
-Production endpoints must use HTTPS. Plain HTTP is accepted only for `localhost`, `127.0.0.1` or `::1` development targets.
+Use `hermes plugins remove reman-agentic` for the official CLI removal path. The packaged `uninstall.sh` is tested as a local, exact-path fallback.
 
-`REMAN_AGENT_ALLOWED_PDF_DIRS` remains a dormant compatibility setting. Even when configured, the create tool stays unavailable until a real scanner and the remaining closure tests are approved. Its filesystem boundary tests remain part of release verification.
+Production endpoints must use HTTPS. Plain HTTP is accepted only for `localhost`, `127.0.0.1` or `::1` synthetic tests. Environment variables are visible to trusted code in the same process, so the REmanager token must not share a Hermes process with unreviewed plugins or tools.
 
-Hermes environment variables are visible to trusted code running in the same process. Do not enable unreviewed plugins or tools in a Hermes process that holds a REman token; use a dedicated OS account/profile with least-privilege filesystem permissions.
+## Grants and behavior
 
-## Grants
+Grant only the Accounting read scopes needed by the user and explicit company resources. `resourceIds=[]` is never unrestricted. The delegating user must retain current Accounting permissions, company access and capabilities; changing or revoking any of them takes effect independently of Hermes.
 
-Grant only the read tools needed by the user, restricted to explicit company IDs. `resourceIds=[]` is never unrestricted; unrestricted access must be an explicit Core grant.
+The plugin registers:
 
-| REman tool | Required scope | Suggested access |
-| --- | --- | --- |
-| `accounting.companies.list` | `accounting.companies.read` | `read` |
-| `accounting.partners.search/get` | `accounting.partners.read` | `read` |
-| `accounting.non_electronic_invoices.search` | `accounting.non_electronic_invoices.read` | `read` |
-| `accounting.documents.search/get` | `accounting.documents.read` | `read` |
-| `accounting.document_due_dates.search/get` | `accounting.document_due_dates.read` | `read` |
-| `accounting.delivery_notes.search/get` | `accounting.delivery_notes.read` | `read` |
-| `accounting.payments.search/get` | `accounting.payments.read` | `read` |
-| `accounting.payment_links.search` | `accounting.payment_links.read` | `read` |
-| `accounting.tax_commitments.search/get` | `accounting.tax_commitments.read` | `read` |
-| `accounting.tax_installments.search/get` | `accounting.tax_installments.read` | `read` |
-| `accounting.loans.search/get` | `accounting.loans.read` | `read` |
-| `accounting.insurance_policies.search/get` | `accounting.insurance_policies.read` | `read` |
-| `accounting.summary.read` | `accounting.summary.read` | `read` |
+- `reman_available_tools`;
+- `reman_accounting_read`;
+- `reman_accounting_list_companies`;
+- `reman_accounting_search_partners`;
+- `reman_accounting_search_non_electronic_invoices`.
 
-The delegating user must still have the current Accounting permissions, company resource access and required capabilities. Changing or revoking a grant in REman takes effect independently of Hermes.
+Discovery is intersected with the exact 22 Accounting read tools approved for this candidate, then filters out every tool without `read`. The static set is only an upper bound and never grants access: the tool must still be returned by REmanager discovery. The generic adapter forces mode `read`, limits input size and rejects caller-supplied user, team, agent, scope or execution context at any nesting level.
 
-The model calls `reman_available_tools`, then `reman_accounting_read` with the exact discovered tool and the camelCase input documented by the bundled skill. Dedicated wrappers remain convenience aliases, not a static authority. `direct` is filtered and rejected.
+Transport failures return `retryable: true`. Policy, authorization, validation and connector-boundary failures return `retryable: false`, including `agentic_disabled` and `agentic_direct_disabled`. HTTP error codes are exposed only from a bounded read-only allowlist; arbitrary remote error text and remote request IDs are never returned to the model.
 
-## Error behavior
-
-Transport failures are returned with `retryable: true`. Core policy, authorization, validation, quarantine, and connector boundary failures return `retryable: false`; in particular, do not retry `agentic_disabled`, `agentic_direct_disabled`, or `agentic_file_quarantine_unavailable` as a workaround.
+The bundled skill is available as `reman-agentic:reman-accounting`.

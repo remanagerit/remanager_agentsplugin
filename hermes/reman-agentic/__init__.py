@@ -14,7 +14,7 @@ def register(ctx):
     ctx.register_skill(
         name="reman-accounting",
         path=Path(__file__).resolve().parent / "skills" / "reman-accounting" / "SKILL.md",
-        description="Governed REman workflow for searching and registering non-electronic supplier invoices.",
+        description="Governed read-only REman Accounting workflows.",
     )
     definitions = (
         (schemas.AVAILABLE_TOOLS, tools.available_tools, _configured, ["REMAN_AGENT_BASE_URL", "REMAN_AGENT_TOKEN"]),

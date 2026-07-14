@@ -1,0 +1,49 @@
+name: Hermes CI
+
+on:
+  pull_request:
+    paths:
+      - "hermes/**"
+      - "scripts/build-hermes-candidate.py"
+      - "scripts/verify-hermes-release.sh"
+      - ".github/workflows/hermes-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "hermes/**"
+      - "scripts/build-hermes-candidate.py"
+      - "scripts/verify-hermes-release.sh"
+      - ".github/workflows/hermes-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-hermes:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify Hermes source and candidate
+        run: ./scripts/verify-hermes-release.sh
+      - name: Build candidate twice and require byte identity
+        run: |
+          set -eu
+          ./scripts/build-hermes-candidate.py --output release/hermes-first > release-first.json
+          ./scripts/build-hermes-candidate.py --output release/hermes-second > release-second.json
+          first=$(sha256sum release/hermes-first/remanager-hermes-agentic-1.0.0.tar.gz | cut -d' ' -f1)
+          second=$(sha256sum release/hermes-second/remanager-hermes-agentic-1.0.0.tar.gz | cut -d' ' -f1)
+          test "$first" = "$second"
+          cmp release/hermes-first/remanager-hermes-agentic-1.0.0.tar.gz \
+            release/hermes-second/remanager-hermes-agentic-1.0.0.tar.gz
+          cp release-first.json release/hermes-first/BUILD-RESULT.json
+          printf '%s  %s\n' "$first" remanager-hermes-agentic-1.0.0.tar.gz \
+            > release/hermes-first/REPRODUCIBLE-SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: remanager-hermes-source-candidate-${{ github.sha }}
+          path: release/hermes-first/
+          if-no-files-found: error
+          retention-days: 14
