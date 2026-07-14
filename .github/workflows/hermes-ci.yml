@@ -31,19 +31,25 @@ jobs:
       - name: Build candidate twice and require byte identity
         run: |
           set -eu
-          ./scripts/build-hermes-candidate.py --output release/hermes-first > release-first.json
-          ./scripts/build-hermes-candidate.py --output release/hermes-second > release-second.json
-          first=$(sha256sum release/hermes-first/remanager-hermes-agentic-1.0.0.tar.gz | cut -d' ' -f1)
-          second=$(sha256sum release/hermes-second/remanager-hermes-agentic-1.0.0.tar.gz | cut -d' ' -f1)
+          candidate_root="$RUNNER_TEMP/hermes-source-candidate"
+          mkdir -p "$candidate_root"
+          ./scripts/build-hermes-candidate.py \
+            --output "$candidate_root/first" > "$candidate_root/first-build.json"
+          ./scripts/build-hermes-candidate.py \
+            --output "$candidate_root/second" > "$candidate_root/second-build.json"
+          first=$(sha256sum "$candidate_root/first/remanager-hermes-agentic-1.0.0.tar.gz" | cut -d' ' -f1)
+          second=$(sha256sum "$candidate_root/second/remanager-hermes-agentic-1.0.0.tar.gz" | cut -d' ' -f1)
           test "$first" = "$second"
-          cmp release/hermes-first/remanager-hermes-agentic-1.0.0.tar.gz \
-            release/hermes-second/remanager-hermes-agentic-1.0.0.tar.gz
-          cp release-first.json release/hermes-first/BUILD-RESULT.json
+          cmp "$candidate_root/first/remanager-hermes-agentic-1.0.0.tar.gz" \
+            "$candidate_root/second/remanager-hermes-agentic-1.0.0.tar.gz"
+          cp "$candidate_root/first-build.json" "$candidate_root/first/BUILD-RESULT.json"
           printf '%s  %s\n' "$first" remanager-hermes-agentic-1.0.0.tar.gz \
-            > release/hermes-first/REPRODUCIBLE-SHA256SUMS
+            > "$candidate_root/first/REPRODUCIBLE-SHA256SUMS"
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: remanager-hermes-source-candidate-${{ github.sha }}
-          path: release/hermes-first/
+          path: ${{ runner.temp }}/hermes-source-candidate/first/
           if-no-files-found: error
           retention-days: 14
