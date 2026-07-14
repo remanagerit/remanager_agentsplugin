@@ -24,6 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
           persist-credentials: false
       - name: Verify Hermes source and candidate
@@ -49,7 +50,7 @@ jobs:
           test -z "$(git status --porcelain)"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: remanager-hermes-source-candidate-${{ github.sha }}
+          name: remanager-hermes-source-candidate-${{ github.event.pull_request.head.sha || github.sha }}
           path: ${{ runner.temp }}/hermes-source-candidate/first/
           if-no-files-found: error
           retention-days: 14
