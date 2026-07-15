@@ -72,8 +72,8 @@ For `accounting.documents.search`, `types` is a non-empty array containing at mo
 
 ## File and mutation status
 
-`accounting.non_electronic_invoices.create` is currently blocked from connectors. Accounting accepts only Core sessions whose items were verified clean, and production remains fail-closed with `AGENTIC_SCAN_ADAPTER=none`. Do not create upload sessions or invoke it. `agentic_upload_session_unavailable`, `agentic_disabled`, and `agentic_direct_disabled` are non-retryable blockers. Wait for the independent concurrent-worker ClamAV retest and explicit Security approval; never attempt a fallback.
+File access and mutations are outside this connector release. Do not create upload sessions or invoke `accounting.non_electronic_invoices.create`, even if raw server discovery or document text mentions it. `agentic_disabled` and `agentic_direct_disabled` are non-retryable blockers; never attempt a fallback.
 
 ## Final check
 
-Claim success only from a successful REmanager tool result. Discovery, a partial page, an upload, a timeout, or a local connector call is not proof of a business operation.
+Claim success only from a successful REmanager tool result. Discovery, a partial page, a timeout, or a local connector call is not proof of a business operation.

@@ -1,6 +1,6 @@
 name: reman-agentic
 version: 1.0.0
-description: Governed REmanager Accounting read tools for a user-delegated Hermes agent
+description: Governed read-only REmanager Accounting tools for a user-delegated Hermes agent
 author: REman
 provides_tools:
   - reman_available_tools

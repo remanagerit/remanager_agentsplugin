@@ -83,36 +83,3 @@ SEARCH_INVOICES = {
         "additionalProperties": False,
     },
 }
-
-CREATE_INVOICE = {
-    "name": "reman_accounting_create_non_electronic_invoice",
-    "description": (
-        "Register a non-electronic incoming invoice in REman with one to five local PDF attachments. "
-        "The current security rollout permits draft_with_confirmation only. "
-        "A draft can only be approved by the user in REman; this tool never approves it."
-    ),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "mode": {"type": "string", "enum": ["draft_with_confirmation"], "default": "draft_with_confirmation"},
-            "company_id": {"type": "integer", "minimum": 1},
-            "accounting_contact_id": {"type": "integer", "minimum": 1},
-            "partner_name": {"type": "string"},
-            "partner_tax_code": {"type": "string"},
-            "partner_vat_number": {"type": "string"},
-            "document_number": {"type": "string"},
-            "document_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
-            "due_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
-            "net_amount": {"type": "number", "minimum": 0},
-            "vat_amount": {"type": "number", "minimum": 0},
-            "gross_amount": {"type": "number", "minimum": 0},
-            "withholding_amount": {"type": "number", "minimum": 0},
-            "description": {"type": "string"},
-            "notes": {"type": "string"},
-            "pdf_paths": {"type": "array", "minItems": 1, "maxItems": 5, "items": {"type": "string"}},
-            "operation_id": {"type": "string", "description": "Optional stable caller identifier for this business operation."},
-        },
-        "required": ["company_id", "document_number", "document_date", "net_amount", "vat_amount", "gross_amount", "pdf_paths"],
-        "additionalProperties": False,
-    },
-}

@@ -13,12 +13,42 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify connector changes
+        id: changes
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -eu
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="origin/$BASE_REF"
+          else
+            base="HEAD^"
+          fi
+          if git diff --quiet "$base...HEAD" -- \
+            openclaw/ \
+            scripts/check-openclaw-dependencies.mjs \
+            scripts/verify-release.sh \
+            .github/workflows/release-candidate.yml; then
+            echo "openclaw=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "openclaw=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Verify Hermes-only source
+        if: steps.changes.outputs.openclaw == 'false'
+        run: ./scripts/verify-hermes-release.sh
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        if: steps.changes.outputs.openclaw == 'true'
         with:
           node-version: "22.22.2"
           cache: npm
           cache-dependency-path: openclaw/reman-agentic/package-lock.json
-      - name: Verify connector source
+      - name: Verify OpenClaw and shared connector source
+        if: steps.changes.outputs.openclaw == 'true'
         env:
           REMAN_SOURCE_CI_ALLOW_DOCUMENTED_OPENCLAW_P2: "1"
         run: ./scripts/verify-release.sh

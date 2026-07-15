@@ -1,0 +1,27 @@
+name: Hermes release candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-hermes-candidate:
+    runs-on: ubuntu-24.04
+    environment: agentic-hermes-release
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify release gate
+        run: ./scripts/verify-hermes-release.sh
+      - name: Build immutable candidate
+        run: ./scripts/build-hermes-candidate.py --output release/hermes
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: remanager-hermes-agentic-${{ github.sha }}
+          path: release/hermes/
+          if-no-files-found: error
+          retention-days: 14
