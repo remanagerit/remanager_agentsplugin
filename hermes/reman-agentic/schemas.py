@@ -25,12 +25,63 @@ INVOKE_ACCOUNTING_READ = {
             },
             "input": {
                 "type": "object",
-                "maxProperties": 32,
+                "maxProperties": 64,
                 "additionalProperties": True,
                 "description": "Business input only; never include user, team, agent, mode, or execution context.",
             },
         },
         "required": ["tool_name", "input"],
+        "additionalProperties": False,
+    },
+}
+
+ACCOUNTING_TOOL_CONTRACT = {
+    "name": "reman_accounting_tool_contract",
+    "description": (
+        "Return the versioned business input contract for one granted Accounting tool. "
+        "Call this before invoking a tool when its required or optional fields are not already known."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "tool_name": {
+                "type": "string",
+                "pattern": "^accounting\\.[a-z0-9_.]+$",
+                "description": "Exact tool name returned by reman_available_tools.",
+            },
+        },
+        "required": ["tool_name"],
+        "additionalProperties": False,
+    },
+}
+
+PREPARE_ACCOUNTING_ACTION = {
+    "name": "reman_accounting_prepare_action",
+    "description": (
+        "Prepare one granted Accounting action for mandatory confirmation by the delegated user in REmanager. "
+        "This tool always uses draft_with_confirmation and can never approve or execute direct actions."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "tool_name": {
+                "type": "string",
+                "pattern": "^accounting\\.[a-z0-9_.]+$",
+                "description": "Exact draft_with_confirmation Accounting tool returned by discovery, excluding the dedicated file tool.",
+            },
+            "input": {
+                "type": "object",
+                "maxProperties": 64,
+                "additionalProperties": True,
+                "description": "CamelCase business input only; never include identity, team, agent, grant, scope, or mode fields.",
+            },
+            "operation_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "description": "Stable unique identifier for this intended business action; reuse it only for an equivalent retry.",
+            },
+        },
+        "required": ["tool_name", "input", "operation_id"],
         "additionalProperties": False,
     },
 }
@@ -80,6 +131,58 @@ SEARCH_INVOICES = {
             "limit": {"type": "integer", "minimum": 1, "maximum": 25, "default": 25},
         },
         "required": ["company_id"],
+        "additionalProperties": False,
+    },
+}
+
+CREATE_INVOICE = {
+    "name": "reman_accounting_create_non_electronic_invoice",
+    "description": (
+        "Upload one to five allowlisted local PDFs and prepare a non-electronic incoming invoice for mandatory "
+        "confirmation by the delegated user in REmanager. The tool waits for REman malware scanning and never approves the action."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "company_id": {"type": "integer", "minimum": 1},
+            "accounting_contact_id": {"type": "integer", "minimum": 1},
+            "partner_name": {"type": "string", "maxLength": 180},
+            "partner_tax_code": {"type": "string", "maxLength": 32},
+            "partner_vat_number": {"type": "string", "maxLength": 32},
+            "document_number": {"type": "string", "minLength": 1, "maxLength": 255},
+            "document_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+            "due_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+            "net_amount": {"type": "number", "minimum": 0},
+            "vat_amount": {"type": "number", "minimum": 0},
+            "gross_amount": {"type": "number", "minimum": 0},
+            "withholding_amount": {"type": "number", "minimum": 0},
+            "original_currency": {"type": "string", "minLength": 3, "maxLength": 8},
+            "original_net_amount": {"type": "number", "minimum": 0},
+            "original_vat_amount": {"type": "number", "minimum": 0},
+            "original_gross_amount": {"type": "number", "minimum": 0},
+            "fx_rate_to_eur": {"type": "number", "exclusiveMinimum": 0},
+            "fx_rate_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+            "fx_rate_source": {"type": "string", "maxLength": 64},
+            "fx_conversion_note": {"type": "string", "maxLength": 255},
+            "description": {"type": "string", "maxLength": 255},
+            "notes": {"type": "string", "maxLength": 5000},
+            "pdf_paths": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 5,
+                "items": {"type": "string"},
+                "description": "Absolute PDF paths below REMAN_AGENT_ALLOWED_PDF_DIRS; symlinks and traversal are denied.",
+            },
+            "operation_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "description": "Stable unique identifier; reuse only for an equivalent retry.",
+            },
+        },
+        "required": [
+            "company_id", "document_number", "document_date", "net_amount", "vat_amount",
+            "gross_amount", "pdf_paths", "operation_id"
+        ],
         "additionalProperties": False,
     },
 }

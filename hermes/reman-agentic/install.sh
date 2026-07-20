@@ -19,7 +19,7 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 mkdir -p "$PLUGINS_DIR" "$STAGING_DIR"
-for file in plugin.yaml __init__.py client.py schemas.py tools.py README.md install.sh uninstall.sh; do
+for file in plugin.yaml __init__.py catalog.py client.py file_access.py schemas.py tools.py README.md install.sh uninstall.sh; do
   cp "$SOURCE_DIR/$file" "$STAGING_DIR/$file"
 done
 for file in RELEASE-MANIFEST.json DEPENDENCIES.json PROVENANCE.json; do

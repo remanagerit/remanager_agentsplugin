@@ -20,6 +20,8 @@ SOURCE_FILES = (
     "plugin.yaml",
     "__init__.py",
     "client.py",
+    "catalog.py",
+    "file_access.py",
     "schemas.py",
     "tools.py",
     "README.md",
@@ -109,7 +111,10 @@ def build(output, allow_dirty=False):
             "version": version,
             "runtime": {"name": "Python", "minimumVersion": "3.10"},
             "thirdPartyRuntimeDependencies": [],
-            "stdlibModules": ["http.client", "json", "os", "pathlib", "re", "socket", "urllib"],
+            "stdlibModules": [
+                "base64", "hashlib", "http.client", "json", "os", "pathlib", "re", "socket",
+                "stat", "tempfile", "time", "urllib"
+            ],
         }
         provenance = {
             "schemaVersion": 1,

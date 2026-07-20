@@ -1,5 +1,6 @@
 """Small stdlib-only client for the governed REman Agentic REST surface."""
 
+import base64
 import http.client
 import json
 import os
@@ -12,29 +13,94 @@ import urllib.request
 
 ACCOUNTING_TOOL_NAME = re.compile(r"^accounting\.[a-z0-9_.]+$")
 APPROVED_ACCOUNTING_READ_TOOLS = frozenset({
+    "accounting.accounts.get",
+    "accounting.accounts.search",
     "accounting.companies.list",
-    "accounting.partners.search",
-    "accounting.partners.get",
-    "accounting.non_electronic_invoices.search",
-    "accounting.documents.search",
-    "accounting.documents.get",
-    "accounting.document_due_dates.search",
-    "accounting.document_due_dates.get",
-    "accounting.delivery_notes.search",
+    "accounting.contact_people.get",
+    "accounting.contact_people.search",
+    "accounting.credit_note_applications.get",
+    "accounting.credit_note_applications.search",
+    "accounting.delivery_note_lines.search",
     "accounting.delivery_notes.get",
-    "accounting.payments.search",
-    "accounting.payments.get",
-    "accounting.payment_links.search",
-    "accounting.tax_commitments.search",
-    "accounting.tax_commitments.get",
-    "accounting.tax_installments.search",
-    "accounting.tax_installments.get",
-    "accounting.loans.search",
-    "accounting.loans.get",
-    "accounting.insurance_policies.search",
+    "accounting.delivery_notes.search",
+    "accounting.document_due_dates.get",
+    "accounting.document_due_dates.search",
+    "accounting.documents.get",
+    "accounting.documents.search",
     "accounting.insurance_policies.get",
+    "accounting.insurance_policies.search",
+    "accounting.loan_installments.get",
+    "accounting.loan_installments.search",
+    "accounting.loans.get",
+    "accounting.loans.search",
+    "accounting.non_electronic_invoices.search",
+    "accounting.partners.get",
+    "accounting.partners.search",
+    "accounting.payment_components.get",
+    "accounting.payment_components.search",
+    "accounting.payment_links.search",
+    "accounting.payments.get",
+    "accounting.payments.search",
     "accounting.summary.read",
+    "accounting.tax_commitments.get",
+    "accounting.tax_commitments.search",
+    "accounting.tax_installments.get",
+    "accounting.tax_installments.search",
 })
+APPROVED_ACCOUNTING_DRAFT_TOOLS = frozenset({
+    "accounting.accounts.create",
+    "accounting.accounts.update",
+    "accounting.contact_people.create",
+    "accounting.contact_people.update",
+    "accounting.credit_note_applications.apply",
+    "accounting.credit_note_applications.unapply",
+    "accounting.delivery_notes.create",
+    "accounting.delivery_notes.mark_seen",
+    "accounting.delivery_notes.mark_unseen",
+    "accounting.document_competence.update",
+    "accounting.document_due_dates.create",
+    "accounting.document_due_dates.mark_paid",
+    "accounting.document_due_dates.unmark_paid",
+    "accounting.document_due_dates.update",
+    "accounting.document_precursor_links.apply",
+    "accounting.document_precursor_links.unapply",
+    "accounting.documents.create",
+    "accounting.documents.duplicate",
+    "accounting.documents.mark_paid",
+    "accounting.documents.mark_seen",
+    "accounting.documents.unmark_paid",
+    "accounting.documents.mark_unseen",
+    "accounting.documents.update",
+    "accounting.insurance_policies.create",
+    "accounting.insurance_policies.renew",
+    "accounting.insurance_policies.status",
+    "accounting.insurance_policies.update",
+    "accounting.loan_installments.create",
+    "accounting.loan_installments.status",
+    "accounting.loan_installments.update",
+    "accounting.loans.create",
+    "accounting.loans.status",
+    "accounting.loans.update",
+    "accounting.non_electronic_invoices.create",
+    "accounting.partners.create",
+    "accounting.partners.update",
+    "accounting.payment_links.create",
+    "accounting.payment_links.remove",
+    "accounting.payments.create",
+    "accounting.payments.duplicate",
+    "accounting.payments.mark_seen",
+    "accounting.payments.mark_unseen",
+    "accounting.payments.split_components",
+    "accounting.payments.update",
+    "accounting.tax_commitments.create",
+    "accounting.tax_commitments.update",
+    "accounting.tax_installments.create",
+    "accounting.tax_installments.mark_paid",
+    "accounting.tax_installments.unmark_paid",
+    "accounting.tax_installments.update",
+})
+FILE_CREATE_TOOL = "accounting.non_electronic_invoices.create"
+APPROVED_ACCOUNTING_TOOLS = APPROVED_ACCOUNTING_READ_TOOLS | APPROVED_ACCOUNTING_DRAFT_TOOLS
 REMOTE_ERROR_CODE = re.compile(r"^[a-z][a-z0-9_]{2,63}$")
 APPROVED_REMOTE_ERROR_CODES = frozenset({
     "accounting_contact_not_found",
@@ -53,6 +119,32 @@ APPROVED_REMOTE_ERROR_CODES = frozenset({
     "accounting_summary_ai_read_failed",
     "accounting_tax_commitment_not_found",
     "accounting_tax_installment_not_found",
+    "accounting_agentic_attachment_create_failed",
+    "accounting_agentic_company_constraint_denied",
+    "accounting_agentic_empty_update",
+    "accounting_agentic_file_count_invalid",
+    "accounting_agentic_file_empty",
+    "accounting_agentic_file_extension_denied",
+    "accounting_agentic_file_mime_denied",
+    "accounting_agentic_file_too_large",
+    "accounting_agentic_mutation_kind_unsupported",
+    "accounting_agentic_pdf_invalid",
+    "accounting_agentic_prepared_state_invalid",
+    "accounting_agentic_stale_state",
+    "accounting_agentic_total_size_exceeded",
+    "accounting_invoice_duplicate",
+    "agentic_action_revalidation_denied",
+    "agentic_idempotency_conflict",
+    "agentic_idempotency_key_required",
+    "agentic_internal_error",
+    "agentic_upload_base64_invalid",
+    "agentic_upload_concurrency_exceeded",
+    "agentic_upload_item_quota_exceeded",
+    "agentic_upload_quota_exceeded",
+    "agentic_upload_session_not_found",
+    "agentic_upload_session_quota_exceeded",
+    "agentic_upload_session_unavailable",
+    "agentic_upload_too_large",
     "agent_token_invalid",
     "agentic_admin_forbidden",
     "agentic_direct_disabled",
@@ -128,15 +220,17 @@ class RemanClient:
         if parsed.scheme != "https" and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
             raise RemanError("reman_https_required")
 
-    def _request(self, method, path, payload=None):
+    def _request(self, method, path, payload=None, idempotency_key=None):
         body = None if payload is None else json.dumps(payload, separators=(",", ":")).encode("utf-8")
         headers = {
             "Accept": "application/json",
-            "User-Agent": "Hermes-REman-Agentic/1.0",
+            "User-Agent": "Hermes-REman-Agentic/1.1",
             "X-REman-Agent-Token": self.token,
         }
         if body is not None:
             headers["Content-Type"] = "application/json"
+        if idempotency_key:
+            headers["X-REman-Idempotency-Key"] = idempotency_key
         request = urllib.request.Request(self.base_url + path, data=body, headers=headers, method=method)
         try:
             with urllib.request.build_opener(_DenyRedirects()).open(request, timeout=self.timeout) as response:
@@ -173,21 +267,33 @@ class RemanClient:
         if not isinstance(discovery, dict):
             raise RemanError("reman_response_invalid")
         sanitized = dict(discovery)
-        sanitized["items"] = [
-            {**item, "supportedModes": ["read"]}
-            for item in discovery.get("items", [])
-            if isinstance(item, dict)
-            and isinstance(item.get("name"), str)
-            and ACCOUNTING_TOOL_NAME.fullmatch(item["name"])
-            and item["name"] in APPROVED_ACCOUNTING_READ_TOOLS
-            and isinstance(item.get("supportedModes"), list)
-            and "read" in item["supportedModes"]
-        ]
+        items = []
+        for item in discovery.get("items", []):
+            if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+                continue
+            name = item["name"]
+            supported = item.get("supportedModes")
+            if not ACCOUNTING_TOOL_NAME.fullmatch(name) or name not in APPROVED_ACCOUNTING_TOOLS or not isinstance(supported, list):
+                continue
+            modes = []
+            if name in APPROVED_ACCOUNTING_READ_TOOLS and "read" in supported:
+                modes.append("read")
+            if name in APPROVED_ACCOUNTING_DRAFT_TOOLS and "draft_with_confirmation" in supported:
+                modes.append("draft_with_confirmation")
+            if modes:
+                items.append({**item, "supportedModes": modes})
+        sanitized["items"] = items
         return sanitized
 
     def require_tool(self, tool_name, mode):
-        if mode != "read":
-            raise RemanError("reman_read_only_connector")
+        if mode == "read":
+            approved = APPROVED_ACCOUNTING_READ_TOOLS
+        elif mode == "draft_with_confirmation":
+            approved = APPROVED_ACCOUNTING_DRAFT_TOOLS
+        else:
+            raise RemanError("reman_direct_mode_disabled" if mode == "direct" else "reman_execution_mode_invalid")
+        if tool_name not in approved:
+            raise RemanError("reman_tool_not_approved_by_connector")
         discovery = self.discover()
         tool = next((item for item in discovery.get("items", []) if item.get("name") == tool_name), None)
         if not tool:
@@ -196,10 +302,36 @@ class RemanClient:
             raise RemanError("reman_tool_mode_not_granted")
         return tool
 
-    def invoke(self, tool_name, mode, input_data):
+    def invoke(self, tool_name, mode, input_data, idempotency_key=None):
         self.require_tool(tool_name, mode)
+        if mode == "draft_with_confirmation" and not idempotency_key:
+            raise RemanError("reman_idempotency_key_required")
         return self._request(
             "POST",
             "/api/v1/agentic/tools/{}/invoke".format(urllib.parse.quote(tool_name, safe="")),
             {"mode": mode, "input": input_data},
+            idempotency_key,
+        )
+
+    def create_upload_session(self, tool_name):
+        self.require_tool(tool_name, "draft_with_confirmation")
+        if tool_name != FILE_CREATE_TOOL:
+            raise RemanError("reman_upload_tool_not_approved")
+        return self._request("POST", "/api/v1/agentic/uploads/sessions", {"toolName": tool_name})
+
+    def upload_pdf(self, session_id, file_name, content):
+        return self._request(
+            "POST",
+            "/api/v1/agentic/uploads/sessions/{}/items".format(urllib.parse.quote(session_id, safe="")),
+            {
+                "fileName": file_name,
+                "mimeType": "application/pdf",
+                "contentBase64": base64.b64encode(content).decode("ascii"),
+            },
+        )
+
+    def get_upload_session(self, session_id):
+        return self._request(
+            "GET",
+            "/api/v1/agentic/uploads/sessions/{}".format(urllib.parse.quote(session_id, safe="")),
         )
