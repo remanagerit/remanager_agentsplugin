@@ -32,7 +32,6 @@ jobs:
           if git diff --quiet "$base...HEAD" -- \
             openclaw/ \
             scripts/check-openclaw-dependencies.mjs \
-            scripts/verify-release.sh \
             .github/workflows/release-candidate.yml; then
             echo "openclaw=false" >> "$GITHUB_OUTPUT"
           else

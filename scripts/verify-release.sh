@@ -2,11 +2,9 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-HERMES="$ROOT/hermes/reman-agentic"
 OPENCLAW="$ROOT/openclaw/reman-agentic"
 
-(cd "$ROOT" && python3 -m unittest hermes/reman-agentic/tests/test_connector.py)
-cmp "$HERMES/skills/reman-accounting/SKILL.md" "$OPENCLAW/skills/reman-accounting/SKILL.md"
+"$ROOT/scripts/verify-hermes-release.sh"
 
 (
   cd "$OPENCLAW"

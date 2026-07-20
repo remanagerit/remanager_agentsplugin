@@ -10,7 +10,7 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 (cd "$ROOT" && python3 -m unittest hermes/reman-agentic/tests/test_connector.py)
-python3 -m py_compile "$HERMES/__init__.py" "$HERMES/client.py" "$HERMES/schemas.py" "$HERMES/tools.py"
+python3 -m py_compile "$HERMES/__init__.py" "$HERMES/catalog.py" "$HERMES/client.py" "$HERMES/file_access.py" "$HERMES/schemas.py" "$HERMES/tools.py"
 sh -n "$HERMES/install.sh" "$HERMES/uninstall.sh"
 
 DIRTY_ARG=
@@ -48,13 +48,16 @@ class Context:
 plugin.register(Context())
 expected = {
     "reman_available_tools",
+    "reman_accounting_tool_contract",
     "reman_accounting_read",
+    "reman_accounting_prepare_action",
     "reman_accounting_list_companies",
     "reman_accounting_search_partners",
     "reman_accounting_search_non_electronic_invoices",
+    "reman_accounting_create_non_electronic_invoice",
 }
 assert set(tools) == expected, tools
-assert not any(word in name for name in tools for word in ("create", "upload", "delete", "direct", "mcp"))
+assert not any(word in name for name in tools for word in ("upload", "delete", "direct", "mcp"))
 PY
 HERMES_HOME="$TEMP_ROOT/hermes-home" "$INSTALLED/uninstall.sh"
 test ! -e "$INSTALLED"
