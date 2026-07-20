@@ -16,6 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / "hermes" / "reman-agentic"
+OFFICIAL_REPOSITORY = "https://github.com/remanagerit/remanager_agentsplugin"
 SOURCE_FILES = (
     "plugin.yaml",
     "__init__.py",
@@ -45,6 +46,20 @@ def canonical_json(value):
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def canonical_repository(remote):
+    normalized = remote.strip().rstrip("/")
+    if normalized.endswith(".git"):
+        normalized = normalized[:-4]
+    repository_path = "remanagerit/remanager_agentsplugin"
+    if normalized == f"https://github.com/{repository_path}":
+        return OFFICIAL_REPOSITORY
+    if re.fullmatch(rf"git@[^:]+:{repository_path}", normalized):
+        return OFFICIAL_REPOSITORY
+    if re.fullmatch(rf"ssh://git@[^/]+/{repository_path}", normalized):
+        return OFFICIAL_REPOSITORY
+    raise SystemExit(f"Unexpected Hermes candidate source repository: {remote}")
 
 
 def file_entry(root, path):
@@ -85,9 +100,9 @@ def build(output, allow_dirty=False):
     tree = run_git("rev-parse", "HEAD^{tree}")
     source_epoch = int(run_git("show", "-s", "--format=%ct", "HEAD"))
     try:
-        repository = run_git("remote", "get-url", "origin")
+        repository = canonical_repository(run_git("remote", "get-url", "origin"))
     except subprocess.CalledProcessError:
-        repository = "unknown"
+        raise SystemExit("Hermes candidate source repository is unavailable.")
     version_match = re.search(r"^version:\s*([^\s]+)\s*$", (PLUGIN / "plugin.yaml").read_text(), re.MULTILINE)
     if not version_match:
         raise SystemExit("Hermes plugin version is missing.")
