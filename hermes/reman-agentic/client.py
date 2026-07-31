@@ -18,6 +18,9 @@ ACCOUNTING_TOOL_NAME = re.compile(r"^accounting\.[a-z0-9_.]+$")
 APPROVED_ACCOUNTING_READ_TOOLS = frozenset({
     "accounting.accounts.get",
     "accounting.accounts.search",
+    "accounting.attachments.create_download_url",
+    "accounting.attachments.get",
+    "accounting.attachments.search",
     "accounting.companies.list",
     "accounting.contact_people.get",
     "accounting.contact_people.search",
@@ -53,6 +56,8 @@ APPROVED_ACCOUNTING_READ_TOOLS = frozenset({
 APPROVED_ACCOUNTING_DRAFT_TOOLS = frozenset({
     "accounting.accounts.create",
     "accounting.accounts.update",
+    "accounting.attachments.add",
+    "accounting.bank_movements.import",
     "accounting.contact_people.create",
     "accounting.contact_people.update",
     "accounting.credit_note_applications.apply",
@@ -68,6 +73,7 @@ APPROVED_ACCOUNTING_DRAFT_TOOLS = frozenset({
     "accounting.document_precursor_links.apply",
     "accounting.document_precursor_links.unapply",
     "accounting.documents.create",
+    "accounting.documents.create_with_attachments",
     "accounting.documents.duplicate",
     "accounting.documents.mark_paid",
     "accounting.documents.mark_seen",
@@ -103,6 +109,11 @@ APPROVED_ACCOUNTING_DRAFT_TOOLS = frozenset({
     "accounting.tax_installments.update",
 })
 FILE_CREATE_TOOL = "accounting.non_electronic_invoices.create"
+FILE_ACTION_TOOLS = frozenset({
+    FILE_CREATE_TOOL,
+    "accounting.documents.create_with_attachments",
+    "accounting.attachments.add",
+})
 APPROVED_ACCOUNTING_TOOLS = APPROVED_ACCOUNTING_READ_TOOLS | APPROVED_ACCOUNTING_DRAFT_TOOLS
 REMOTE_ERROR_CODE = re.compile(r"^[a-z][a-z0-9_]{2,63}$")
 APPROVED_REMOTE_ERROR_CODES = frozenset({
@@ -150,6 +161,8 @@ APPROVED_REMOTE_ERROR_CODES = frozenset({
     "agentic_upload_too_large",
     "agent_token_invalid",
     "agentic_admin_forbidden",
+    "agentic_attachment_download_https_required",
+    "agentic_attachment_download_not_available",
     "agentic_direct_disabled",
     "agentic_disabled",
     "agentic_execution_mode_denied",
@@ -229,7 +242,7 @@ class RemanClient:
         body = None if payload is None else json.dumps(payload, separators=(",", ":")).encode("utf-8")
         headers = {
             "Accept": "application/json",
-            "User-Agent": "Hermes-REman-Agentic/1.1.1",
+            "User-Agent": "Hermes-REman-Agentic/1.2.0",
             "X-REman-Agent-Token": self.token,
         }
         if body is not None:
@@ -320,7 +333,7 @@ class RemanClient:
 
     def create_upload_session(self, tool_name):
         self.require_tool(tool_name, "draft_with_confirmation")
-        if tool_name != FILE_CREATE_TOOL:
+        if tool_name not in FILE_ACTION_TOOLS:
             raise RemanError("reman_upload_tool_not_approved")
         return self._request("POST", "/api/v1/agentic/uploads/sessions", {"toolName": tool_name})
 

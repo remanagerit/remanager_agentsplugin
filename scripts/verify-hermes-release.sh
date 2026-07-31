@@ -51,6 +51,7 @@ expected = {
     "reman_accounting_tool_contract",
     "reman_accounting_read",
     "reman_accounting_prepare_action",
+    "reman_accounting_prepare_file_action",
     "reman_accounting_list_companies",
     "reman_accounting_search_partners",
     "reman_accounting_search_non_electronic_invoices",
