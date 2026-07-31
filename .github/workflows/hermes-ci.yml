@@ -38,13 +38,18 @@ jobs:
             --output "$candidate_root/first" > "$candidate_root/first-build.json"
           ./scripts/build-hermes-candidate.py \
             --output "$candidate_root/second" > "$candidate_root/second-build.json"
-          first=$(sha256sum "$candidate_root/first/remanager-hermes-agentic-1.1.0.tar.gz" | cut -d' ' -f1)
-          second=$(sha256sum "$candidate_root/second/remanager-hermes-agentic-1.1.0.tar.gz" | cut -d' ' -f1)
+          first_archive=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["archive"])' \
+            "$candidate_root/first-build.json")
+          second_archive=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["archive"])' \
+            "$candidate_root/second-build.json")
+          archive_name=$(basename "$first_archive")
+          test "$archive_name" = "$(basename "$second_archive")"
+          first=$(sha256sum "$first_archive" | cut -d' ' -f1)
+          second=$(sha256sum "$second_archive" | cut -d' ' -f1)
           test "$first" = "$second"
-          cmp "$candidate_root/first/remanager-hermes-agentic-1.1.0.tar.gz" \
-            "$candidate_root/second/remanager-hermes-agentic-1.1.0.tar.gz"
+          cmp "$first_archive" "$second_archive"
           cp "$candidate_root/first-build.json" "$candidate_root/first/BUILD-RESULT.json"
-          printf '%s  %s\n' "$first" remanager-hermes-agentic-1.1.0.tar.gz \
+          printf '%s  %s\n' "$first" "$archive_name" \
             > "$candidate_root/first/REPRODUCIBLE-SHA256SUMS"
           git diff --exit-code
           test -z "$(git status --porcelain)"

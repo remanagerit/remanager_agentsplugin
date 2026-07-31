@@ -8,7 +8,7 @@ from .file_access import has_configured_pdf_roots
 
 
 def _configured():
-    return bool(os.environ.get("REMAN_AGENT_BASE_URL", "").strip() and os.environ.get("REMAN_AGENT_TOKEN", "").strip())
+    return bool(os.environ.get("REMAN_AGENT_TOKEN", "").strip())
 
 
 def _configured_for_files():
@@ -22,18 +22,18 @@ def register(ctx):
         description="Governed REmanager Accounting read and user-confirmed action workflows.",
     )
     definitions = (
-        (schemas.AVAILABLE_TOOLS, tools.available_tools, _configured, ["REMAN_AGENT_BASE_URL", "REMAN_AGENT_TOKEN"]),
-        (schemas.ACCOUNTING_TOOL_CONTRACT, tools.tool_contract, _configured, ["REMAN_AGENT_BASE_URL", "REMAN_AGENT_TOKEN"]),
-        (schemas.INVOKE_ACCOUNTING_READ, tools.invoke_accounting_read, _configured, ["REMAN_AGENT_BASE_URL", "REMAN_AGENT_TOKEN"]),
-        (schemas.PREPARE_ACCOUNTING_ACTION, tools.prepare_accounting_action, _configured, ["REMAN_AGENT_BASE_URL", "REMAN_AGENT_TOKEN"]),
-        (schemas.LIST_COMPANIES, tools.list_companies, _configured, ["REMAN_AGENT_BASE_URL", "REMAN_AGENT_TOKEN"]),
-        (schemas.SEARCH_PARTNERS, tools.search_partners, _configured, ["REMAN_AGENT_BASE_URL", "REMAN_AGENT_TOKEN"]),
-        (schemas.SEARCH_INVOICES, tools.search_invoices, _configured, ["REMAN_AGENT_BASE_URL", "REMAN_AGENT_TOKEN"]),
+        (schemas.AVAILABLE_TOOLS, tools.available_tools, _configured, ["REMAN_AGENT_TOKEN"]),
+        (schemas.ACCOUNTING_TOOL_CONTRACT, tools.tool_contract, _configured, ["REMAN_AGENT_TOKEN"]),
+        (schemas.INVOKE_ACCOUNTING_READ, tools.invoke_accounting_read, _configured, ["REMAN_AGENT_TOKEN"]),
+        (schemas.PREPARE_ACCOUNTING_ACTION, tools.prepare_accounting_action, _configured, ["REMAN_AGENT_TOKEN"]),
+        (schemas.LIST_COMPANIES, tools.list_companies, _configured, ["REMAN_AGENT_TOKEN"]),
+        (schemas.SEARCH_PARTNERS, tools.search_partners, _configured, ["REMAN_AGENT_TOKEN"]),
+        (schemas.SEARCH_INVOICES, tools.search_invoices, _configured, ["REMAN_AGENT_TOKEN"]),
         (
             schemas.CREATE_INVOICE,
             tools.create_invoice,
             _configured_for_files,
-            ["REMAN_AGENT_BASE_URL", "REMAN_AGENT_TOKEN", "REMAN_AGENT_ALLOWED_PDF_DIRS"],
+            ["REMAN_AGENT_TOKEN", "REMAN_AGENT_ALLOWED_PDF_DIRS"],
         ),
     )
     for schema, handler, check_fn, required_env in definitions:

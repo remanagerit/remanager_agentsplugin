@@ -11,6 +11,9 @@ import urllib.parse
 import urllib.request
 
 
+DEFAULT_REMAN_BASE_URL = "https://app.remanager.it"
+
+
 ACCOUNTING_TOOL_NAME = re.compile(r"^accounting\.[a-z0-9_.]+$")
 APPROVED_ACCOUNTING_READ_TOOLS = frozenset({
     "accounting.accounts.get",
@@ -204,7 +207,9 @@ class _DenyRedirects(urllib.request.HTTPRedirectHandler):
 
 class RemanClient:
     def __init__(self, base_url=None, token=None, timeout=None):
-        self.base_url = (base_url or os.environ.get("REMAN_AGENT_BASE_URL", "")).strip().rstrip("/")
+        self.base_url = (
+            base_url or os.environ.get("REMAN_AGENT_BASE_URL", "") or DEFAULT_REMAN_BASE_URL
+        ).strip().rstrip("/")
         self.token = (token or os.environ.get("REMAN_AGENT_TOKEN", "")).strip()
         self.timeout = float(timeout or os.environ.get("REMAN_AGENT_TIMEOUT_SECONDS", "30"))
         self._validate_configuration()
@@ -224,7 +229,7 @@ class RemanClient:
         body = None if payload is None else json.dumps(payload, separators=(",", ":")).encode("utf-8")
         headers = {
             "Accept": "application/json",
-            "User-Agent": "Hermes-REman-Agentic/1.1",
+            "User-Agent": "Hermes-REman-Agentic/1.1.1",
             "X-REman-Agent-Token": self.token,
         }
         if body is not None:

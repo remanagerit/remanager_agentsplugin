@@ -216,6 +216,29 @@ class ConnectorTest(unittest.TestCase):
         self.assertEqual(len(CATALOG.TOOL_CONTRACTS), 83)
         self.assertNotIn("accounting.bank_movements.import", CATALOG.TOOL_CONTRACTS)
 
+    def test_operator_instructions_are_self_contained(self):
+        readme = (PLUGIN_DIR / "README.md").read_text(encoding="utf-8")
+        skill = (PLUGIN_DIR / "skills" / "reman-accounting" / "SKILL.md").read_text(encoding="utf-8")
+        plugin_manifest = (PLUGIN_DIR / "plugin.yaml").read_text(encoding="utf-8")
+        installer = (PLUGIN_DIR / "install.sh").read_text(encoding="utf-8")
+
+        for content in (readme, skill, plugin_manifest, installer):
+            self.assertIn("https://app.remanager.it", content)
+
+        self.assertIn("official REmanager production origin by default", readme)
+        self.assertIn("optional override", readme)
+        self.assertIn("directories on the machine where the Hermes process runs", readme)
+        self.assertIn("The user decides which directories are allowed", readme)
+        self.assertIn("Separate multiple roots with `:` on macOS/Linux and `;` on Windows", skill)
+        self.assertIn("preferably read-only", skill)
+        self.assertIn("Without it, reads and non-file drafts remain usable", skill)
+
+    def test_official_production_url_is_the_default(self):
+        os.environ.pop("REMAN_AGENT_BASE_URL", None)
+        client = CLIENT.RemanClient(token="synthetic-token")
+        self.assertEqual(client.base_url, "https://app.remanager.it")
+        self.assertTrue(PLUGIN._configured())
+
     def test_discovery_exposes_exact_approved_modes_and_hides_direct(self):
         discovery = CLIENT.RemanClient().discover()
         self.assertEqual({item["name"] for item in discovery["items"]}, CLIENT.APPROVED_ACCOUNTING_TOOLS)

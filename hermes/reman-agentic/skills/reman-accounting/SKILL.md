@@ -7,6 +7,18 @@ description: Use governed REmanager Accounting discovery, bounded reads, and act
 
 Use only the typed `reman_*` tools supplied by this plugin. Never use browser automation, direct HTTP, shell commands, database access, user cookies, passwords, internal endpoints, storage paths, or provider credentials as a substitute.
 
+## Connection setup
+
+- The official production URL `https://app.remanager.it` is built into the connector; do not derive or ask the user for it.
+- `REMAN_AGENT_BASE_URL` is only an optional override for an approved staging or self-hosted origin explicitly supplied by the user.
+- For an override, do not append `/api`, `/api/v1` or `/api/v1/agentic`; the connector builds those paths.
+- Treat `REMAN_AGENT_TOKEN` as a process secret. Never ask the user to paste it into conversation or expose it in tool output.
+- `REMAN_AGENT_ALLOWED_PDF_DIRS` contains absolute local directories on the machine or container running Hermes. These are not REmanager server directories.
+- Ask the user which local directories are authorized. Never choose, infer, scan for, or widen roots on the user's behalf.
+- Separate multiple roots with `:` on macOS/Linux and `;` on Windows.
+- In a container, use only paths mounted into that container from user-approved host directories, preferably read-only.
+- The PDF setting is optional. Without it, reads and non-file drafts remain usable, while the invoice PDF workflow must fail closed.
+
 ## Security boundaries
 
 - Never request, display, copy, or log the REmanager agent token.
@@ -79,6 +91,8 @@ A successful preparation returns `pending_confirmation` and an `actionId`. Expla
 ## Non-electronic invoice with PDFs
 
 Use `reman_accounting_create_non_electronic_invoice`. Supply explicit invoice values, one to five absolute PDF paths under `REMAN_AGENT_ALLOWED_PDF_DIRS`, and a stable `operation_id`.
+
+Only accept PDF paths located under roots the user explicitly configured. Never substitute a broader parent directory, search unrelated folders, or treat a REmanager storage location as a local root.
 
 The connector:
 

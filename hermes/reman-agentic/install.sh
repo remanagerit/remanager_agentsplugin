@@ -37,4 +37,7 @@ mv "$STAGING_DIR" "$TARGET_DIR"
 trap - EXIT HUP INT TERM
 
 printf '%s\n' "Installed REman Agentic plugin in $TARGET_DIR"
-printf '%s\n' "Configure REMAN_AGENT_BASE_URL and REMAN_AGENT_TOKEN, then run: hermes plugins enable reman-agentic"
+printf '%s\n' "Production URL https://app.remanager.it is built in. Configure REMAN_AGENT_TOKEN."
+printf '%s\n' "Use REMAN_AGENT_BASE_URL only to override production with a user-approved staging or self-hosted origin."
+printf '%s\n' "For invoice PDFs, set REMAN_AGENT_ALLOWED_PDF_DIRS to absolute local directories explicitly approved by the user."
+printf '%s\n' "Then run: hermes plugins enable reman-agentic"
