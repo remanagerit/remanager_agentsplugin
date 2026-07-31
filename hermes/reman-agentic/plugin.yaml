@@ -1,5 +1,5 @@
 name: reman-agentic
-version: 1.1.1
+version: 1.2.0
 description: Governed REmanager Accounting tools using the built-in production URL https://app.remanager.it
 author: REman
 provides_tools:
@@ -7,6 +7,7 @@ provides_tools:
   - reman_accounting_tool_contract
   - reman_accounting_read
   - reman_accounting_prepare_action
+  - reman_accounting_prepare_file_action
   - reman_accounting_list_companies
   - reman_accounting_search_partners
   - reman_accounting_search_non_electronic_invoices

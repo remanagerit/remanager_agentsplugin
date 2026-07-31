@@ -30,6 +30,7 @@ class State:
     base_url = ""
     adversary_url = ""
     upload_status = "ready"
+    upload_tool = CLIENT.FILE_CREATE_TOOL
 
 
 def discovered_items():
@@ -42,13 +43,12 @@ def discovered_items():
             "name": name,
             "supportedModes": ["draft_with_confirmation", "direct"],
             "description": "draft",
-            **({"filePolicy": {"maxFiles": 5, "maxFileBytes": 20 * 1024 * 1024, "maxTotalBytes": 100 * 1024 * 1024}} if name == CLIENT.FILE_CREATE_TOOL else {}),
+            **({"filePolicy": {"maxFiles": 5, "maxFileBytes": 20 * 1024 * 1024, "maxTotalBytes": 100 * 1024 * 1024}} if name in CLIENT.FILE_ACTION_TOOLS else {}),
         }
         for name in sorted(CLIENT.APPROVED_ACCOUNTING_DRAFT_TOOLS)
     ]
     return read + drafts + [
         {"name": "accounting.settings.update", "supportedModes": ["direct"]},
-        {"name": "accounting.bank_movements.import", "supportedModes": ["draft_with_confirmation"]},
         {"name": "tasks.search", "supportedModes": ["read"]},
     ]
 
@@ -85,7 +85,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/api/v1/agentic/uploads/sessions/"):
             self._send(200, {
                 "sessionId": "session-1",
-                "toolName": CLIENT.FILE_CREATE_TOOL,
+                "toolName": State.upload_tool,
                 "status": State.upload_status,
                 "items": [{"itemId": "item-1", "status": "clean" if State.upload_status == "ready" else State.upload_status}],
             })
@@ -96,6 +96,7 @@ class Handler(BaseHTTPRequestHandler):
         payload = self._json()
         State.requests.append(("POST", self.path, payload, dict(self.headers)))
         if self.path == "/api/v1/agentic/uploads/sessions":
+            State.upload_tool = payload.get("toolName")
             self._send(201, {"sessionId": "session-1", "status": "uploaded"})
         elif self.path.endswith("/items"):
             self._send(201, {"itemId": "item-1", "status": "pending_scan"})
@@ -112,6 +113,14 @@ class Handler(BaseHTTPRequestHandler):
                 })
             else:
                 self._send(503, {"error": "agentic_disabled", "requestId": "req-policy-1"})
+        elif self.path.endswith("/accounting.attachments.create_download_url/invoke"):
+            self._send(200, {"result": {
+                "item": {
+                    "url": State.base_url + "/api/v1/attachments/shared/capability-opaque/download",
+                    "expiresAt": "2026-07-20T12:05:00Z",
+                    "maxAccessCount": 1,
+                },
+            }})
         elif self.path.endswith("/accounting.payments.create/invoke"):
             self._send(200, {"result": {
                 "status": "pending_confirmation",
@@ -132,6 +141,18 @@ class Handler(BaseHTTPRequestHandler):
                 "inputSummary": {"companyId": 7},
                 "resourceSummary": {"resourceType": "company", "resourceId": 7},
             }, "idempotentReplay": False, "requestId": "req-safe"})
+        elif self.path.endswith("/accounting.documents.create_with_attachments/invoke"):
+            self._send(200, {"result": {
+                "status": "pending_confirmation", "actionId": "action-document-file-1",
+                "expiresAt": "2026-07-20T12:00:00Z", "confirmationRequired": True,
+                "preview": {"attachmentCount": 1}, "inputSummary": {"companyId": 7},
+            }, "idempotentReplay": False})
+        elif self.path.endswith("/accounting.attachments.add/invoke"):
+            self._send(200, {"result": {
+                "status": "pending_confirmation", "actionId": "action-attachment-1",
+                "expiresAt": "2026-07-20T12:00:00Z", "confirmationRequired": True,
+                "preview": {"attachmentCount": 1}, "inputSummary": {"companyId": 7},
+            }, "idempotentReplay": False})
         else:
             self._send(404, {"error": "not_found"})
 
@@ -171,6 +192,7 @@ class ConnectorTest(unittest.TestCase):
         State.requests = []
         State.adversary_requests = []
         State.upload_status = "ready"
+        State.upload_tool = CLIENT.FILE_CREATE_TOOL
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.allowed = self.root / "allowed"
@@ -204,17 +226,37 @@ class ConnectorTest(unittest.TestCase):
             "operation_id": "invoice-42-v1",
         }
 
+    def document_file_args(self):
+        return {
+            "tool_name": "accounting.documents.create_with_attachments",
+            "input": {
+                "companyId": 7,
+                "type": "other_expense",
+                "documentNumber": "EXP-42",
+                "documentDate": "2026-07-20",
+                "grossAmount": 300,
+                "paymentDirection": "out",
+                "dueDates": [
+                    {"dueDate": "2026-08-31", "amount": 100},
+                    {"dueDate": "2026-09-30", "amount": 200},
+                ],
+                "paymentAllocations": [{"paymentId": 41, "allocatedAmount": 120}],
+            },
+            "pdf_paths": [str(self.pdf)],
+            "operation_id": "expense-42-v1",
+        }
+
     def assert_file_error(self, path, code, before_open=None):
         with self.assertRaises(CLIENT.RemanError) as raised:
             FILES.read_allowed_pdf(path, FILES.allowed_pdf_roots(), max_bytes=1024 * 1024, before_open=before_open)
         self.assertEqual(raised.exception.code, code)
 
-    def test_catalog_has_exact_83_tool_membership(self):
-        self.assertEqual(len(CLIENT.APPROVED_ACCOUNTING_READ_TOOLS), 33)
-        self.assertEqual(len(CLIENT.APPROVED_ACCOUNTING_DRAFT_TOOLS), 50)
+    def test_catalog_has_exact_89_tool_membership(self):
+        self.assertEqual(len(CLIENT.APPROVED_ACCOUNTING_READ_TOOLS), 36)
+        self.assertEqual(len(CLIENT.APPROVED_ACCOUNTING_DRAFT_TOOLS), 53)
         self.assertEqual(set(CATALOG.TOOL_CONTRACTS), CLIENT.APPROVED_ACCOUNTING_TOOLS)
-        self.assertEqual(len(CATALOG.TOOL_CONTRACTS), 83)
-        self.assertNotIn("accounting.bank_movements.import", CATALOG.TOOL_CONTRACTS)
+        self.assertEqual(len(CATALOG.TOOL_CONTRACTS), 89)
+        self.assertIn("accounting.bank_movements.import", CATALOG.TOOL_CONTRACTS)
 
     def test_operator_instructions_are_self_contained(self):
         readme = (PLUGIN_DIR / "README.md").read_text(encoding="utf-8")
@@ -249,15 +291,24 @@ class ConnectorTest(unittest.TestCase):
         self.assertNotIn("secret-agent-token", output)
         self.assertNotIn("tasks.search", output)
         self.assertNotIn("accounting.settings.update", output)
-        self.assertNotIn("accounting.bank_movements.import", output)
+        self.assertIn("accounting.bank_movements.import", output)
         self.assertNotIn('"direct"', output)
 
     def test_contract_requires_current_discovery_and_returns_bounded_fields(self):
         contract = json.loads(TOOLS.tool_contract({"tool_name": "accounting.payments.create"}))
         self.assertEqual(contract["mode"], "draft_with_confirmation")
         self.assertIn("companyId", contract["required"])
-        denied = json.loads(TOOLS.tool_contract({"tool_name": "accounting.bank_movements.import"}))
-        self.assertEqual(denied["error"], "reman_tool_not_approved_by_connector")
+        bank_import = json.loads(TOOLS.tool_contract({"tool_name": "accounting.bank_movements.import"}))
+        self.assertEqual(bank_import["mode"], "draft_with_confirmation")
+
+        document = json.loads(TOOLS.tool_contract({"tool_name": "accounting.documents.create"}))
+        self.assertIn("dueDates", document["optional"])
+        self.assertIn("paymentAllocations", document["optional"])
+        self.assertFalse(any("residual" in field.lower() for field in document["required"] + document["optional"]))
+
+        attachments = json.loads(TOOLS.tool_contract({"tool_name": "accounting.attachments.add"}))
+        self.assertEqual(attachments["connectorTool"], "reman_accounting_prepare_file_action")
+        self.assertNotIn("residual", json.dumps(PLUGIN.schemas.CREATE_INVOICE).lower())
 
     def test_generic_accounting_read_uses_discovery_and_forces_read(self):
         result = json.loads(TOOLS.invoke_accounting_read({
@@ -267,6 +318,18 @@ class ConnectorTest(unittest.TestCase):
         self.assertEqual(result["result"]["items"][0]["id"], 41)
         invoke = next(item for item in State.requests if item[1].endswith("/accounting.payments.search/invoke"))
         self.assertEqual(invoke[2], {"mode": "read", "input": {"companyId": 7, "limit": 25, "cursor": 0}})
+
+    def test_attachment_download_capability_is_returned_without_reflecting_agent_token(self):
+        output = TOOLS.invoke_accounting_read({
+            "tool_name": "accounting.attachments.create_download_url",
+            "input": {"companyId": 7, "targetType": "document", "targetId": 91, "attachmentId": 12},
+        })
+        result = json.loads(output)
+        self.assertEqual(result["result"]["item"]["maxAccessCount"], 1)
+        self.assertTrue(result["result"]["item"]["url"].endswith("/download"))
+        self.assertNotIn("secret-agent-token", output)
+        invoke = next(item for item in State.requests if item[1].endswith("/accounting.attachments.create_download_url/invoke"))
+        self.assertEqual(invoke[2]["mode"], "read")
 
     def test_generic_action_forces_draft_and_derives_stable_idempotency(self):
         args = {
@@ -321,6 +384,43 @@ class ConnectorTest(unittest.TestCase):
         combined = output + ledger
         for forbidden in ("secret-agent-token", "never persist me", "INV-42", str(self.pdf), "%PDF-", "contentBase64"):
             self.assertNotIn(forbidden, combined)
+
+    def test_generic_file_actions_support_documents_and_existing_resources(self):
+        document = json.loads(TOOLS.prepare_accounting_file_action(self.document_file_args()))
+        self.assertEqual(document["result"]["status"], "pending_confirmation")
+        session = next(item for item in State.requests if item[1] == "/api/v1/agentic/uploads/sessions")
+        self.assertEqual(session[2], {"toolName": "accounting.documents.create_with_attachments"})
+        invoke = next(item for item in State.requests if item[1].endswith("/accounting.documents.create_with_attachments/invoke"))
+        self.assertEqual(invoke[2]["mode"], "draft_with_confirmation")
+        self.assertEqual(len(invoke[2]["input"]["dueDates"]), 2)
+        self.assertEqual(invoke[2]["input"]["paymentAllocations"], [{"paymentId": 41, "allocatedAmount": 120}])
+
+        State.requests = []
+        attachment = json.loads(TOOLS.prepare_accounting_file_action({
+            "tool_name": "accounting.attachments.add",
+            "input": {"companyId": 7, "targetType": "payment", "targetId": 41, "description": "Quietanza"},
+            "pdf_paths": [str(self.pdf)],
+            "operation_id": "attachment-payment-41-v1",
+        }))
+        self.assertEqual(attachment["result"]["status"], "pending_confirmation")
+        session = next(item for item in State.requests if item[1] == "/api/v1/agentic/uploads/sessions")
+        self.assertEqual(session[2], {"toolName": "accounting.attachments.add"})
+        invoke = next(item for item in State.requests if item[1].endswith("/accounting.attachments.add/invoke"))
+        self.assertNotIn("pdf_paths", invoke[2]["input"])
+        self.assertIn("uploadSessionId", invoke[2]["input"])
+
+    def test_invoice_wrapper_maps_multiple_due_dates_and_existing_payment_allocations(self):
+        args = self.invoice_args()
+        args["due_dates"] = [
+            {"dueDate": "2026-08-31", "amount": 61},
+            {"dueDate": "2026-09-30", "amount": 61},
+        ]
+        args["payment_allocations"] = [{"paymentId": 41, "allocatedAmount": 40}]
+        result = json.loads(TOOLS.create_invoice(args))
+        self.assertEqual(result["result"]["status"], "pending_confirmation")
+        invoke = next(item for item in State.requests if item[1].endswith("/accounting.non_electronic_invoices.create/invoke"))
+        self.assertEqual(len(invoke[2]["input"]["dueDates"]), 2)
+        self.assertEqual(invoke[2]["input"]["paymentAllocations"], [{"paymentId": 41, "allocatedAmount": 40}])
 
     def test_pending_scan_returns_continuation_without_invoking_business_tool(self):
         State.upload_status = "pending_scan"
@@ -404,6 +504,7 @@ class ConnectorTest(unittest.TestCase):
             CLIENT.RemanClient().invoke("accounting.payments.create", "direct", {}, "key")
         self.assertEqual(raised.exception.code, "reman_direct_mode_disabled")
         self.assertNotIn("mode", PLUGIN.schemas.PREPARE_ACCOUNTING_ACTION["parameters"]["properties"])
+        self.assertNotIn("mode", PLUGIN.schemas.PREPARE_ACCOUNTING_FILE_ACTION["parameters"]["properties"])
         self.assertNotIn("mode", PLUGIN.schemas.CREATE_INVOICE["parameters"]["properties"])
 
     def test_remote_plain_http_is_rejected(self):
@@ -426,15 +527,18 @@ class ConnectorTest(unittest.TestCase):
         names = {item["name"] for item in registered}
         expected = {
             "reman_available_tools", "reman_accounting_tool_contract", "reman_accounting_read",
-            "reman_accounting_prepare_action", "reman_accounting_list_companies",
+            "reman_accounting_prepare_action", "reman_accounting_prepare_file_action", "reman_accounting_list_companies",
             "reman_accounting_search_partners", "reman_accounting_search_non_electronic_invoices",
             "reman_accounting_create_non_electronic_invoice",
         }
         self.assertEqual(names, expected)
         file_tool = next(item for item in registered if item["name"] == "reman_accounting_create_non_electronic_invoice")
+        generic_file_tool = next(item for item in registered if item["name"] == "reman_accounting_prepare_file_action")
         self.assertTrue(file_tool["check_fn"]())
+        self.assertTrue(generic_file_tool["check_fn"]())
         os.environ.pop("REMAN_AGENT_ALLOWED_PDF_DIRS")
         self.assertFalse(file_tool["check_fn"]())
+        self.assertFalse(generic_file_tool["check_fn"]())
         self.assertEqual([item["name"] for item in skills], ["reman-accounting"])
         self.assertTrue(skills[0]["path"].is_file())
 

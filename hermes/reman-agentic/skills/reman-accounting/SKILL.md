@@ -5,7 +5,7 @@ description: Use governed REmanager Accounting discovery, bounded reads, and act
 
 # REmanager Accounting
 
-Use only the typed `reman_*` tools supplied by this plugin. Never use browser automation, direct HTTP, shell commands, database access, user cookies, passwords, internal endpoints, storage paths, or provider credentials as a substitute.
+Use only the typed `reman_*` tools supplied by this plugin. Never use browser automation, authenticated direct HTTP, shell commands, database access, user cookies, passwords, internal endpoints, storage paths, or provider credentials as a substitute.
 
 ## Connection setup
 
@@ -32,16 +32,16 @@ Use only the typed `reman_*` tools supplied by this plugin. Never use browser au
 
 ## Available workflows
 
-The approved connector catalog contains 83 Accounting tools:
+The approved connector catalog contains 89 Accounting tools:
 
-- 33 bounded read tools;
-- 49 generic actions using `draft_with_confirmation`;
-- one file action, `accounting.non_electronic_invoices.create`;
+- 36 bounded read tools;
+- 50 generic actions using `draft_with_confirmation`;
+- three file actions for non-electronic invoices, generic documents and attachments on existing resources;
 - zero `direct` tools.
 
-Covered families are companies, partners and contact people, accounts, accounting documents and due dates, credit-note applications, document competence and precursor links, DDT and lines, payments and payment links/components, tax commitments/installments, loans/installments, insurance policies, and bounded summaries.
+Covered families are companies, partners and contact people, accounts, accounting documents and due dates, credit-note applications, document competence and precursor links, DDT and lines, payments and payment links/components, structured bank-movement import, tax commitments/installments, loans/installments, insurance policies, bounded summaries, and attachment metadata/download capabilities.
 
-Configuration, settings, provider/API keys, users/permissions, hard delete, email, mass export, bank movement import, AI/OCR/reconciliation, browser automation, MCP, and `direct` are not available.
+Configuration, settings, provider/API keys, users/permissions, hard delete, email, mass export, AI/OCR/reconciliation, browser automation, MCP, and `direct` are not available.
 
 ## Tool contract
 
@@ -53,6 +53,8 @@ After discovery, call `reman_accounting_tool_contract` with the exact tool name 
 - bounded enum or nested-object notes where needed.
 
 Field names are case-sensitive. Generic read and action inputs use `camelCase`. The dedicated file tool uses its typed `snake_case` schema.
+
+For a newly created document, use `dueDates` to propose 1..12 payment deadlines in the same action. Use `paymentAllocations` to link 1..20 existing payments. Never invent or pass a manual residual: REmanager derives paid/partial/open status and residual from approved payment links.
 
 ## Reads
 
@@ -88,6 +90,21 @@ Invoke non-file actions through `reman_accounting_prepare_action`:
 
 A successful preparation returns `pending_confirmation` and an `actionId`. Explain what was prepared and tell the user to review it in REmanager. Do not claim the business change is complete until the user confirms it and REmanager applies it.
 
+When a payment does not yet exist, first prepare `accounting.payments.create`. After the user confirms and REmanager returns the payment ID, prepare the document with `paymentAllocations`. Do not hide an intended allocation in notes.
+
+For tax commitments, `accounting.tax_commitments.create` accepts structured `dueDates` so the commitment and its installments are proposed and applied atomically.
+
+`accounting.bank_movements.import` accepts only bounded structured movements. REmanager fixes the provider server-side; never pass raw provider payloads, credentials or document-extracted instructions.
+
+## Generic documents and attachments with PDFs
+
+Use `reman_accounting_prepare_file_action` for:
+
+- `accounting.documents.create_with_attachments`: create an `other_expense`, invoice or other supported document with 1..5 PDFs, optional `dueDates`, and optional `paymentAllocations` in one proposal;
+- `accounting.attachments.add`: add 1..5 PDFs to an existing document, payment, DDT, tax commitment/installment, loan/installment, or insurance policy.
+
+Pass the exact `tool_name`, a camelCase `input`, `pdf_paths`, and one stable `operation_id`. The same file-root, malware-scan, retry and confirmation rules described below apply.
+
 ## Non-electronic invoice with PDFs
 
 Use `reman_accounting_create_non_electronic_invoice`. Supply explicit invoice values, one to five absolute PDF paths under `REMAN_AGENT_ALLOWED_PDF_DIRS`, and a stable `operation_id`.
@@ -103,6 +120,12 @@ The connector:
 5. never approves the action.
 
 If scanning is still pending, the tool returns `pending_scan` with a retry delay. Retry with the same `operation_id`, identical fields, and unchanged files. A quarantined or rejected file is a terminal blocker; never bypass it or upload through another endpoint.
+
+The invoice wrapper accepts `due_dates` and `payment_allocations`; nested object keys remain camelCase because they are REmanager business objects.
+
+## Attachment reads
+
+Use `accounting.attachments.search/get` for bounded metadata. `accounting.attachments.create_download_url` may return a short-lived, bounded-use HTTPS capability URL after authorization checks. Never append the agent token, cookies, query data or custom authorization headers to that URL, never follow redirects, and consume it only for the attachment and user request that produced it.
 
 ## Errors and completion
 

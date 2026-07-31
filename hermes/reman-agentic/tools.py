@@ -12,6 +12,7 @@ from .catalog import TOOL_CONTRACTS, contract_for
 from .client import (
     APPROVED_ACCOUNTING_DRAFT_TOOLS,
     APPROVED_ACCOUNTING_READ_TOOLS,
+    FILE_ACTION_TOOLS,
     FILE_CREATE_TOOL,
     RemanClient,
     RemanError,
@@ -24,7 +25,7 @@ OPERATION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 STATE_TTL_SECONDS = 7 * 24 * 60 * 60
 RESERVED_AGENT_INPUT_KEYS = {
     "agentId", "delegatingUserId", "executionMode", "grantVersion", "isExternalAgent",
-    "isSystemAdmin", "mode", "scopes", "teamId", "userId",
+    "isSystemAdmin", "mode", "scopes", "teamId", "uploadSessionId", "userId",
 }
 
 
@@ -128,7 +129,7 @@ def invoke_accounting_read(args, **kwargs):
 
 def _prepare_accounting_action(args):
     tool_name = args.get("tool_name")
-    if tool_name == FILE_CREATE_TOOL:
+    if tool_name in FILE_ACTION_TOOLS:
         raise RemanError("reman_file_tool_requires_dedicated_handler")
     input_data = _validate_business_input(tool_name, args.get("input"), APPROVED_ACCOUNTING_DRAFT_TOOLS)
     operation_id = _operation_id(args.get("operation_id"))
@@ -227,8 +228,9 @@ def _read_pdfs(paths, policy, roots, before_open=None):
     return metadata
 
 
-def _file_fingerprint(input_data, files, operation_id):
+def _file_fingerprint(tool_name, input_data, files, operation_id):
     canonical = {
+        "toolName": tool_name,
         "input": input_data,
         "files": [{"name": item["name"], "sha256": item["sha256"], "size": len(item["content"])} for item in files],
         "operationId": operation_id,
@@ -253,28 +255,17 @@ def _wait_for_ready(client, session_id):
         time.sleep(1)
 
 
-def _create_invoice(args):
-    operation_id = _operation_id(args.get("operation_id"))
+def _prepare_file_action(tool_name, input_data, pdf_paths, operation_id):
+    if tool_name not in FILE_ACTION_TOOLS:
+        raise RemanError("reman_file_tool_not_approved")
+    operation_id = _operation_id(operation_id)
+    input_data = _validate_business_input(tool_name, input_data, APPROVED_ACCOUNTING_DRAFT_TOOLS)
     roots = allowed_pdf_roots()
     client = RemanClient()
-    tool = client.require_tool(FILE_CREATE_TOOL, "draft_with_confirmation")
+    tool = client.require_tool(tool_name, "draft_with_confirmation")
     policy = tool.get("filePolicy") or {}
-    files = _read_pdfs(args.get("pdf_paths"), policy, roots)
-    input_data = _compact({
-        "companyId": args.get("company_id"), "accountingContactId": args.get("accounting_contact_id"),
-        "partnerName": args.get("partner_name"), "partnerTaxCode": args.get("partner_tax_code"),
-        "partnerVatNumber": args.get("partner_vat_number"), "documentNumber": args.get("document_number"),
-        "documentDate": args.get("document_date"), "dueDate": args.get("due_date"),
-        "netAmount": args.get("net_amount"), "vatAmount": args.get("vat_amount"), "grossAmount": args.get("gross_amount"),
-        "withholdingAmount": args.get("withholding_amount"), "originalCurrency": args.get("original_currency"),
-        "originalNetAmount": args.get("original_net_amount"), "originalVatAmount": args.get("original_vat_amount"),
-        "originalGrossAmount": args.get("original_gross_amount"), "fxRateToEur": args.get("fx_rate_to_eur"),
-        "fxRateDate": args.get("fx_rate_date"), "fxRateSource": args.get("fx_rate_source"),
-        "fxConversionNote": args.get("fx_conversion_note"), "description": args.get("description"),
-        "notes": args.get("notes"),
-    })
-    _validate_business_input(FILE_CREATE_TOOL, input_data, APPROVED_ACCOUNTING_DRAFT_TOOLS)
-    fingerprint = _file_fingerprint(input_data, files, operation_id)
+    files = _read_pdfs(pdf_paths, policy, roots)
+    fingerprint = _file_fingerprint(tool_name, input_data, files, operation_id)
     state_path = _state_root() / (fingerprint + ".json")
     lock_path = _state_root() / (fingerprint + ".lock")
     try:
@@ -290,7 +281,7 @@ def _create_invoice(args):
         if state.get("status") == "succeeded" and isinstance(state.get("response"), dict):
             return state["response"]
         if not state.get("uploadSessionId"):
-            session = client.create_upload_session(FILE_CREATE_TOOL)
+            session = client.create_upload_session(tool_name)
             state["uploadSessionId"] = session.get("sessionId")
             if not isinstance(state["uploadSessionId"], str):
                 raise RemanError("reman_response_invalid")
@@ -311,7 +302,7 @@ def _create_invoice(args):
             _atomic_json(state_path, state)
             return {"result": {"status": "pending_scan", "operationId": operation_id, "retryAfterSeconds": 5}}
         response = client.invoke(
-            FILE_CREATE_TOOL,
+            tool_name,
             "draft_with_confirmation",
             {**input_data, "uploadSessionId": state["uploadSessionId"]},
             state["idempotencyKey"],
@@ -325,6 +316,42 @@ def _create_invoice(args):
             lock_path.rmdir()
         except OSError:
             pass
+
+
+def _prepare_accounting_file_action(args):
+    return _prepare_file_action(
+        args.get("tool_name"),
+        args.get("input"),
+        args.get("pdf_paths"),
+        args.get("operation_id"),
+    )
+
+
+def prepare_accounting_file_action(args, **kwargs):
+    return _ok(lambda: _prepare_accounting_file_action(args))
+
+
+def _create_invoice(args):
+    input_data = _compact({
+        "companyId": args.get("company_id"), "accountingContactId": args.get("accounting_contact_id"),
+        "partnerName": args.get("partner_name"), "partnerTaxCode": args.get("partner_tax_code"),
+        "partnerVatNumber": args.get("partner_vat_number"), "documentNumber": args.get("document_number"),
+        "documentDate": args.get("document_date"), "dueDate": args.get("due_date"),
+        "dueDates": args.get("due_dates"), "paymentAllocations": args.get("payment_allocations"),
+        "netAmount": args.get("net_amount"), "vatAmount": args.get("vat_amount"), "grossAmount": args.get("gross_amount"),
+        "withholdingAmount": args.get("withholding_amount"), "originalCurrency": args.get("original_currency"),
+        "originalNetAmount": args.get("original_net_amount"), "originalVatAmount": args.get("original_vat_amount"),
+        "originalGrossAmount": args.get("original_gross_amount"), "fxRateToEur": args.get("fx_rate_to_eur"),
+        "fxRateDate": args.get("fx_rate_date"), "fxRateSource": args.get("fx_rate_source"),
+        "fxConversionNote": args.get("fx_conversion_note"), "description": args.get("description"),
+        "notes": args.get("notes"),
+    })
+    return _prepare_file_action(
+        FILE_CREATE_TOOL,
+        input_data,
+        args.get("pdf_paths"),
+        args.get("operation_id"),
+    )
 
 
 def create_invoice(args, **kwargs):
