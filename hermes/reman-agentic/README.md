@@ -6,8 +6,6 @@ The connector upper bound is 83 tools: 33 reads, 49 generic `draft_with_confirma
 
 Configuration, provider/API keys, users/permissions, hard delete, mass export, email, bank movement import, AI/OCR/reconciliation, browser automation and MCP are excluded.
 
-> Release status: version 1.1.0 must not be published or configured with real tokens until Security/AppSec approves the exact candidate commit, tree, archive checksum and provenance, and the separate REmanager production gate is approved.
-
 ## Format and installation
 
 The archive uses Hermes' supported directory-plugin format: one `reman-agentic/` directory containing `plugin.yaml`, Python handlers, schemas, the versioned catalog and the bundled skill.
@@ -18,17 +16,41 @@ After an approved release:
 2. Verify the archive SHA-256 and complete manifest.
 3. Extract the `reman-agentic/` directory.
 4. Run `./install.sh` from that verified directory, or place it at `~/.hermes/plugins/reman-agentic`.
-5. Configure `REMAN_AGENT_BASE_URL` and a distinct `REMAN_AGENT_TOKEN` in the dedicated trusted Hermes process.
-6. For PDF invoice upload, configure `REMAN_AGENT_ALLOWED_PDF_DIRS` as an OS-path-separator-delimited allowlist of absolute directories.
+5. Configure a distinct `REMAN_AGENT_TOKEN` in the dedicated trusted Hermes process. The official production URL is built in.
+6. For PDF invoice upload, ask the user which local directories Hermes may access and configure those roots through `REMAN_AGENT_ALLOWED_PDF_DIRS`.
 7. Run `hermes plugins enable reman-agentic` and restart Hermes.
 
 Use `hermes plugins remove reman-agentic` for the official CLI removal path. The packaged `uninstall.sh` is an exact-path fallback.
 
 Production endpoints require HTTPS. Plain HTTP is accepted only for local synthetic tests. The token must not share a process with unreviewed plugins or tools.
 
+## Production connection and local PDF folders
+
+The plugin uses the official REmanager production origin by default, so a standard installation needs only the token:
+
+```sh
+REMAN_AGENT_TOKEN=<token-created-in-REmanager>
+```
+
+The built-in base URL is `https://app.remanager.it`. Do not derive or alter it. `REMAN_AGENT_BASE_URL` is an optional override only when the user explicitly provides an approved REmanager staging or self-hosted deployment. When overriding it, do not append `/api`, `/api/v1` or `/api/v1/agentic`; the connector appends the governed API paths itself.
+
+`REMAN_AGENT_ALLOWED_PDF_DIRS` is optional and is required only for the non-electronic invoice workflow. Its entries are absolute directories on the machine where the Hermes process runs, not directories on the REmanager server. The user decides which directories are allowed; the agent must not invent roots or widen the configured boundary.
+
+Use the operating-system path separator between multiple roots:
+
+```sh
+# macOS/Linux
+REMAN_AGENT_ALLOWED_PDF_DIRS=/data/invoices:/data/scans
+
+# Windows
+REMAN_AGENT_ALLOWED_PDF_DIRS=C:\Invoices;D:\Scans
+```
+
+When Hermes runs in a container, configure paths visible inside that container and mount only the user-approved host directories, preferably read-only. Without `REMAN_AGENT_ALLOWED_PDF_DIRS`, all read tools and non-file draft actions remain available, while PDF upload fails closed.
+
 ## Grants and behavior
 
-Create one token per installation with a short bounded TTL. Grant only needed Accounting tool scopes and explicit companies. `resourceIds=[]` is never unrestricted. Revocation, permission loss, capability loss and company-access loss take effect independently of Hermes.
+Create one token per installation with a short bounded TTL. In REmanager, grant the Administration module at `read` or `draft_with_confirmation` level and select the allowed companies. Revocation, permission loss, capability loss and company-access loss take effect independently of Hermes.
 
 The plugin registers:
 

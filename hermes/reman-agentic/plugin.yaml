@@ -1,6 +1,6 @@
 name: reman-agentic
-version: 1.1.0
-description: Governed REmanager Accounting read and user-confirmed action tools for a delegated Hermes agent
+version: 1.1.1
+description: Governed REmanager Accounting tools using the built-in production URL https://app.remanager.it
 author: REman
 provides_tools:
   - reman_available_tools
@@ -12,9 +12,6 @@ provides_tools:
   - reman_accounting_search_non_electronic_invoices
   - reman_accounting_create_non_electronic_invoice
 requires_env:
-  - name: REMAN_AGENT_BASE_URL
-    description: Public HTTPS base URL of the REman deployment
-    secret: false
   - name: REMAN_AGENT_TOKEN
     description: Scoped external-agent token created in REman Account settings
     secret: true

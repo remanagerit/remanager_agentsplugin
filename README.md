@@ -4,20 +4,19 @@ Official connector source for external user-delegated agents. Connectors use onl
 
 ## Current status
 
-- Hermes `1.0.0` is the currently published read-only release.
-- Hermes `1.1.0` is a candidate for the approved Accounting surface: 33 bounded reads and 50 actions fixed to `draft_with_confirmation`, including non-electronic invoice PDFs after malware scanning.
-- Hermes `1.1.0` must not be published or configured with real tokens before exact-candidate Security approval and a separate REmanager production gate.
-- OpenClaw remains a separate, unpublished gate and is not part of the Hermes `1.1.0` candidate.
+- Hermes `1.1.0` is the currently published release for the approved Accounting surface: 33 bounded reads and 50 actions fixed to `draft_with_confirmation`, including non-electronic invoice PDFs after malware scanning.
+- Hermes `1.1.1` is a documentation-only candidate that makes production connection and user-controlled local PDF-folder setup self-contained for agents.
+- OpenClaw remains a separate, unpublished gate and is not part of the Hermes release.
 - `direct`, MCP, configuration, provider credentials, users/permissions, hard delete, mass export, email, bank import and internal AI/OCR/reconciliation remain excluded.
 
 ## Packages
 
 | Runtime | Package | Status |
 | --- | --- | --- |
-| Hermes | `hermes/reman-agentic` | `1.1.0` candidate; directory-plugin release archive |
+| Hermes | `hermes/reman-agentic` | `1.1.0` published; `1.1.1` documentation candidate |
 | OpenClaw | `openclaw/reman-agentic` | separate unpublished source |
 
-Hermes `1.1.0` registers discovery, a versioned input-contract lookup, generic read and user-confirmed action adapters, narrow read conveniences, and a dedicated allowlisted PDF invoice action. Discovery is authoritative and every action requires confirmation by the delegating user in REmanager.
+Hermes registers discovery, a versioned input-contract lookup, generic read and user-confirmed action adapters, narrow read conveniences, and a dedicated allowlisted PDF invoice action. Discovery is authoritative and every action requires confirmation by the delegating user in REmanager.
 
 Runtime adapters call only:
 
