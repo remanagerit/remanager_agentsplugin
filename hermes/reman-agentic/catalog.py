@@ -34,6 +34,12 @@ READ_CONTRACTS = {
     "accounting.delivery_notes.search": _contract("read", ("companyId",), ("query", "limit", "cursor")),
     "accounting.document_due_dates.get": _contract("read", ("companyId", "dueDateId")),
     "accounting.document_due_dates.search": _contract("read", ("companyId",), ("documentId", "limit", "cursor")),
+    "accounting.documents.create_access_urls": _contract(
+        "read",
+        ("companyId", "documentId"),
+        ("ttlSeconds",),
+        "Returns a single-use view URL and, when available, a distinct single-use original-file URL. Default and maximum TTL are 10800 seconds. XML invoice views use AssoSoftware HTML, PDF views are inline, and documents without a primary attachment use printable HTML. Consume capability URLs without the agent token, cookies, custom authorization headers or redirects",
+    ),
     "accounting.documents.get": _contract("read", ("companyId", "documentId")),
     "accounting.documents.search": _contract("read", ("companyId", "types"), ("query", "limit", "cursor"), "types: 1..6 values among invoice_in, invoice_out, invoice_non_electronic_in, invoice_notice_in, credit_note, other_expense"),
     "accounting.insurance_policies.get": _contract("read", ("companyId", "policyId")),

@@ -121,6 +121,16 @@ class Handler(BaseHTTPRequestHandler):
                     "maxAccessCount": 1,
                 },
             }})
+        elif self.path.endswith("/accounting.documents.create_access_urls/invoke"):
+            self._send(200, {"result": {
+                "viewUrl": State.base_url + "/api/v1/accounting/shared/documents/view-capability/view",
+                "viewExpiresAt": "2026-07-20T15:00:00Z",
+                "viewFormat": "assosoftware_html",
+                "originalDownloadUrl": State.base_url + "/api/v1/attachments/shared/raw-capability/download",
+                "originalExpiresAt": "2026-07-20T15:00:00Z",
+                "originalMimeType": "text/xml",
+                "originalFileName": "invoice.xml",
+            }})
         elif self.path.endswith("/accounting.payments.create/invoke"):
             self._send(200, {"result": {
                 "status": "pending_confirmation",
@@ -251,12 +261,13 @@ class ConnectorTest(unittest.TestCase):
             FILES.read_allowed_pdf(path, FILES.allowed_pdf_roots(), max_bytes=1024 * 1024, before_open=before_open)
         self.assertEqual(raised.exception.code, code)
 
-    def test_catalog_has_exact_89_tool_membership(self):
-        self.assertEqual(len(CLIENT.APPROVED_ACCOUNTING_READ_TOOLS), 36)
+    def test_catalog_has_exact_90_tool_membership(self):
+        self.assertEqual(len(CLIENT.APPROVED_ACCOUNTING_READ_TOOLS), 37)
         self.assertEqual(len(CLIENT.APPROVED_ACCOUNTING_DRAFT_TOOLS), 53)
         self.assertEqual(set(CATALOG.TOOL_CONTRACTS), CLIENT.APPROVED_ACCOUNTING_TOOLS)
-        self.assertEqual(len(CATALOG.TOOL_CONTRACTS), 89)
+        self.assertEqual(len(CATALOG.TOOL_CONTRACTS), 90)
         self.assertIn("accounting.bank_movements.import", CATALOG.TOOL_CONTRACTS)
+        self.assertIn("accounting.documents.create_access_urls", CATALOG.TOOL_CONTRACTS)
 
     def test_operator_instructions_are_self_contained(self):
         readme = (PLUGIN_DIR / "README.md").read_text(encoding="utf-8")
@@ -274,6 +285,11 @@ class ConnectorTest(unittest.TestCase):
         self.assertIn("Separate multiple roots with `:` on macOS/Linux and `;` on Windows", skill)
         self.assertIn("preferably read-only", skill)
         self.assertIn("Without it, reads and non-file drafts remain usable", skill)
+        self.assertIn("AssoSoftware", skill)
+        self.assertIn("10800", skill)
+        self.assertIn("single-use", skill)
+        self.assertIn("version: 1.2.1", plugin_manifest)
+        self.assertIn('Hermes-REman-Agentic/1.2.1', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
 
     def test_official_production_url_is_the_default(self):
         os.environ.pop("REMAN_AGENT_BASE_URL", None)
@@ -310,6 +326,12 @@ class ConnectorTest(unittest.TestCase):
         self.assertEqual(attachments["connectorTool"], "reman_accounting_prepare_file_action")
         self.assertNotIn("residual", json.dumps(PLUGIN.schemas.CREATE_INVOICE).lower())
 
+        document_access = json.loads(TOOLS.tool_contract({"tool_name": "accounting.documents.create_access_urls"}))
+        self.assertEqual(document_access["mode"], "read")
+        self.assertEqual(document_access["required"], ["companyId", "documentId"])
+        self.assertEqual(document_access["optional"], ["ttlSeconds"])
+        self.assertIn("10800", document_access["notes"])
+
     def test_generic_accounting_read_uses_discovery_and_forces_read(self):
         result = json.loads(TOOLS.invoke_accounting_read({
             "tool_name": "accounting.payments.search",
@@ -330,6 +352,23 @@ class ConnectorTest(unittest.TestCase):
         self.assertNotIn("secret-agent-token", output)
         invoke = next(item for item in State.requests if item[1].endswith("/accounting.attachments.create_download_url/invoke"))
         self.assertEqual(invoke[2]["mode"], "read")
+
+    def test_document_view_and_original_urls_are_distinct_and_token_free(self):
+        output = TOOLS.invoke_accounting_read({
+            "tool_name": "accounting.documents.create_access_urls",
+            "input": {"companyId": 7, "documentId": 91, "ttlSeconds": 10800},
+        })
+        result = json.loads(output)["result"]
+        self.assertEqual(result["viewFormat"], "assosoftware_html")
+        self.assertTrue(result["viewUrl"].endswith("/view"))
+        self.assertTrue(result["originalDownloadUrl"].endswith("/download"))
+        self.assertNotEqual(result["viewUrl"], result["originalDownloadUrl"])
+        self.assertNotIn("secret-agent-token", output)
+        invoke = next(item for item in State.requests if item[1].endswith("/accounting.documents.create_access_urls/invoke"))
+        self.assertEqual(invoke[2], {
+            "mode": "read",
+            "input": {"companyId": 7, "documentId": 91, "ttlSeconds": 10800},
+        })
 
     def test_generic_action_forces_draft_and_derives_stable_idempotency(self):
         args = {
