@@ -31,6 +31,7 @@ APPROVED_ACCOUNTING_READ_TOOLS = frozenset({
     "accounting.delivery_notes.search",
     "accounting.document_due_dates.get",
     "accounting.document_due_dates.search",
+    "accounting.documents.create_access_urls",
     "accounting.documents.get",
     "accounting.documents.search",
     "accounting.insurance_policies.get",
@@ -174,6 +175,9 @@ APPROVED_REMOTE_ERROR_CODES = frozenset({
     "agentic_module_disabled",
     "agentic_rate_limit_exceeded",
     "agentic_resource_denied",
+    "agentic_resource_capability_https_required",
+    "agentic_resource_capability_invalid",
+    "agentic_resource_capability_unavailable",
     "agentic_result_too_large",
     "agentic_scope_denied",
     "agentic_tool_not_found",
@@ -242,7 +246,7 @@ class RemanClient:
         body = None if payload is None else json.dumps(payload, separators=(",", ":")).encode("utf-8")
         headers = {
             "Accept": "application/json",
-            "User-Agent": "Hermes-REman-Agentic/1.2.0",
+            "User-Agent": "Hermes-REman-Agentic/1.2.1",
             "X-REman-Agent-Token": self.token,
         }
         if body is not None:
