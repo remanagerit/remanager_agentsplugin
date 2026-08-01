@@ -20,6 +20,8 @@ After an approved release:
 6. For any PDF workflow, ask the user which local directories Hermes may access and configure those roots through `REMAN_AGENT_ALLOWED_PDF_DIRS`.
 7. Run `hermes plugins enable reman-agentic` and restart Hermes.
 
+To upgrade an existing installation atomically, run `./install.sh --upgrade` from the newly verified release directory, then enable the plugin again and restart the Hermes process. Confirm that `~/.hermes/plugins/reman-agentic/plugin.yaml` reports the expected version before using newly added tools; merely downloading or extracting a release does not update an already running Hermes process.
+
 Use `hermes plugins remove reman-agentic` for the official CLI removal path. The packaged `uninstall.sh` is an exact-path fallback.
 
 Production endpoints require HTTPS. Plain HTTP is accepted only for local synthetic tests. The token must not share a process with unreviewed plugins or tools.
@@ -66,15 +68,15 @@ The static 90-tool catalog is only an upper bound and never grants access. A too
 
 Document creation supports up to 12 structured due dates and up to 20 allocations to existing payments. REmanager derives the residual and paid/partial/open status from payment links; the plugin deliberately exposes no manually editable residual field. Generic file actions support `other_expense` and other document types, and can attach clean PDFs to existing Accounting resources.
 
-Attachment metadata is available through bounded read tools. A download request returns a short-lived, single-use HTTPS capability URL after REmanager authorization checks. That URL must be consumed without the Agentic token, cookies or redirects and must never be persisted in a ledger or log.
+Attachment metadata is available through bounded read tools. A download request returns a short-lived HTTPS capability URL after REmanager authorization checks. The URL is reusable until expiry so messaging previews cannot consume it before the user. It must be opened without the Agentic token, cookies or redirects and must never be persisted in a ledger or log.
 
-For a complete Accounting document, call `accounting.documents.create_access_urls` through `reman_accounting_read` with `companyId`, `documentId`, and optional `ttlSeconds`. The default and maximum TTL are three hours (`10800` seconds). REmanager returns a single-use `viewUrl` and, when an original attachment is available, a separate single-use `originalDownloadUrl`:
+For a complete Accounting document, call `accounting.documents.create_access_urls` through `reman_accounting_read` with `companyId`, `documentId`, and optional `ttlSeconds`. The default and maximum TTL are three hours (`10800` seconds). REmanager returns a reusable `viewUrl` and, when an original attachment is available, a separate reusable `originalDownloadUrl`:
 
 - XML invoices open as REmanager's AssoSoftware HTML rendering through `viewUrl`; `originalDownloadUrl` downloads the original XML;
 - PDF documents open inline through `viewUrl`; `originalDownloadUrl` downloads the original PDF;
 - documents without a primary XML/PDF attachment use a printable HTML view and may omit `originalDownloadUrl`.
 
-Each URL is an opaque bearer capability. Open it only for the user's current request, never append the agent token, cookies, query data or custom authorization headers, never follow redirects, and never persist or log it. Because each link is single-use, generate a fresh pair instead of replaying a consumed URL.
+Each URL is an opaque bearer capability. It may be opened repeatedly until `viewExpiresAt` or `originalExpiresAt`, but only for the user's current request. Never append the agent token, cookies, query data or custom authorization headers, never follow redirects, and never persist or log it. Generate a fresh pair after expiry or revocation.
 
 Mutations require a stable `operation_id`; the connector derives the idempotency key. The model cannot provide raw headers or select `direct`. File access is fail-closed when PDF roots are absent and rejects traversal, symlinks, non-regular files and evident TOCTOU changes. Uploaded files are not consumed until the Core scanner reports the entire session `ready`.
 

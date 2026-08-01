@@ -125,7 +125,7 @@ The invoice wrapper accepts `due_dates` and `payment_allocations`; nested object
 
 ## Attachment reads
 
-Use `accounting.attachments.search/get` for bounded metadata. `accounting.attachments.create_download_url` may return a short-lived, bounded-use HTTPS capability URL after authorization checks. Never append the agent token, cookies, query data or custom authorization headers to that URL, never follow redirects, and consume it only for the attachment and user request that produced it.
+Use `accounting.attachments.search/get` for bounded metadata. `accounting.attachments.create_download_url` may return a short-lived HTTPS capability URL reusable until expiry after authorization checks. Never append the agent token, cookies, query data or custom authorization headers to that URL, never follow redirects, and use it only for the attachment and user request that produced it.
 
 ## Document views and original files
 
@@ -138,13 +138,13 @@ When the user wants to open, inspect or download a complete Accounting document,
 }
 ```
 
-`ttlSeconds` is optional; the default and maximum are three hours (`10800` seconds). The result contains a single-use `viewUrl` and can contain a distinct single-use `originalDownloadUrl`:
+`ttlSeconds` is optional; the default and maximum are three hours (`10800` seconds). The result contains a `viewUrl` and can contain a distinct `originalDownloadUrl`; each URL is reusable until its own expiry:
 
 - for an XML invoice, give the user `viewUrl` for the REmanager AssoSoftware rendering and `originalDownloadUrl` only when the original XML is requested;
 - for a PDF, use `viewUrl` for inline viewing and `originalDownloadUrl` only when a file download is requested;
 - for a document without a primary XML/PDF attachment, use the printable HTML `viewUrl`; an original download may be absent.
 
-The two URLs are separate capabilities and consuming one does not consume the other. Do not open both automatically. Open or provide only the URL needed for the user's current request. Never append `REMAN_AGENT_TOKEN`, cookies, query data, custom authorization headers or any other credential; never follow redirects; never persist, quote in logs, or reuse a URL. If a link has already been consumed or expired, call the tool again after rechecking the user's request and current authorization.
+The two URLs are separate capabilities. Do not open both automatically. Open or provide only the URL needed for the user's current request. Messaging previews may open a URL without invalidating it, and repeated access is allowed only until the returned expiry. Never append `REMAN_AGENT_TOKEN`, cookies, query data, custom authorization headers or any other credential; never follow redirects; never persist or quote the URL in logs. If a link is expired or revoked, call the tool again after rechecking the user's request and current authorization.
 
 ## Errors and completion
 

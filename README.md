@@ -5,7 +5,7 @@ Official connector source for external user-delegated agents. Connectors use onl
 ## Current status
 
 - Hermes `1.2.0` is the currently published Accounting parity release.
-- Hermes `1.2.1` is the document-access candidate: 37 bounded reads and 53 actions fixed to `draft_with_confirmation`, including separate single-use document view and original-file URLs with a maximum three-hour TTL.
+- Hermes `1.2.2` is the reusable document-access candidate: 37 bounded reads and 53 actions fixed to `draft_with_confirmation`, including separate document view and original-file URLs reusable until their maximum three-hour expiry.
 - OpenClaw remains a separate, unpublished gate and is not part of the Hermes release.
 - `direct`, MCP, configuration, provider credentials, users/permissions, hard delete, mass export, email and internal AI/OCR/reconciliation remain excluded. Structured bank-movement import is included without provider credentials or raw provider payloads.
 
@@ -13,7 +13,7 @@ Official connector source for external user-delegated agents. Connectors use onl
 
 | Runtime | Package | Status |
 | --- | --- | --- |
-| Hermes | `hermes/reman-agentic` | `1.2.0` published; `1.2.1` document-access candidate |
+| Hermes | `hermes/reman-agentic` | `1.2.1` published; `1.2.2` reusable document-access candidate |
 | OpenClaw | `openclaw/reman-agentic` | separate unpublished source |
 
 Hermes registers discovery, a versioned input-contract lookup, generic read and user-confirmed action adapters, narrow read conveniences, a backwards-compatible invoice PDF wrapper, and a generic allowlisted PDF action for documents and existing Accounting resources. Discovery is authoritative and every action requires confirmation by the delegating user in REmanager.

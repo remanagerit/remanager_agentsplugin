@@ -118,7 +118,7 @@ class Handler(BaseHTTPRequestHandler):
                 "item": {
                     "url": State.base_url + "/api/v1/attachments/shared/capability-opaque/download",
                     "expiresAt": "2026-07-20T12:05:00Z",
-                    "maxAccessCount": 1,
+                    "maxAccessCount": None,
                 },
             }})
         elif self.path.endswith("/accounting.documents.create_access_urls/invoke"):
@@ -287,9 +287,12 @@ class ConnectorTest(unittest.TestCase):
         self.assertIn("Without it, reads and non-file drafts remain usable", skill)
         self.assertIn("AssoSoftware", skill)
         self.assertIn("10800", skill)
-        self.assertIn("single-use", skill)
-        self.assertIn("version: 1.2.1", plugin_manifest)
-        self.assertIn('Hermes-REman-Agentic/1.2.1', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
+        self.assertIn("reusable until", skill)
+        self.assertIn("Messaging previews", skill)
+        self.assertIn("--upgrade", readme)
+        self.assertIn("restart the Hermes process", readme)
+        self.assertIn("version: 1.2.2", plugin_manifest)
+        self.assertIn('Hermes-REman-Agentic/1.2.2', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
 
     def test_official_production_url_is_the_default(self):
         os.environ.pop("REMAN_AGENT_BASE_URL", None)
@@ -347,7 +350,7 @@ class ConnectorTest(unittest.TestCase):
             "input": {"companyId": 7, "targetType": "document", "targetId": 91, "attachmentId": 12},
         })
         result = json.loads(output)
-        self.assertEqual(result["result"]["item"]["maxAccessCount"], 1)
+        self.assertIsNone(result["result"]["item"]["maxAccessCount"])
         self.assertTrue(result["result"]["item"]["url"].endswith("/download"))
         self.assertNotIn("secret-agent-token", output)
         invoke = next(item for item in State.requests if item[1].endswith("/accounting.attachments.create_download_url/invoke"))
