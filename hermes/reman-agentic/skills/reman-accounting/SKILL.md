@@ -153,6 +153,7 @@ The two URLs are separate capabilities. Do not open both automatically. Open or 
 - Policy, authentication, validation, quarantine, stale-state, and authorization errors are non-retryable.
 - Only transport failures are marked retryable. Retry an equivalent mutation with the same `operation_id`.
 - A replay can report the current action as `failed`, `rejected`, `cancelled`, `expired`, or `applied`. Never describe a terminal action as pending. If the user explicitly asks to prepare a replacement for a failed, rejected, cancelled, or expired action, use a new unique `operation_id`; do not reuse the terminal action's identifier.
+- A terminal replay may include a bounded public `errorCode`. Use it only to explain the outcome; never expose or infer database, storage, provider, path, token, or exception details.
 - `agentic_disabled` and `agentic_direct_disabled` are terminal policy blockers; never attempt a fallback.
 - Claim read success only from a successful REmanager result.
 - Claim mutation completion only after REmanager reports the action as applied following user confirmation. Preparation alone is not completion.

@@ -148,6 +148,7 @@ class Handler(BaseHTTPRequestHandler):
                 "actionId": "action-invoice-1",
                 "expiresAt": "2026-07-20T12:00:00Z",
                 "confirmationRequired": State.file_action_status == "pending_confirmation",
+                "errorCode": "agentic_upload_session_unavailable" if State.file_action_status == "failed" else None,
                 "preview": {"attachmentUploadSessionPrepared": True},
                 "inputSummary": {"companyId": 7},
                 "resourceSummary": {"resourceType": "company", "resourceId": 7},
@@ -490,6 +491,7 @@ class ConnectorTest(unittest.TestCase):
         third = json.loads(TOOLS.create_invoice(self.invoice_args()))
         self.assertEqual(third["result"]["status"], "failed")
         self.assertFalse(third["result"]["confirmationRequired"])
+        self.assertEqual(third["result"]["errorCode"], "agentic_upload_session_unavailable")
         self.assertEqual(len([item for item in State.requests if item[1] == "/api/v1/agentic/uploads/sessions"]), 1)
         self.assertEqual(len([item for item in State.requests if item[1].endswith("/items")]), 1)
         self.assertEqual(len([item for item in State.requests if item[1].endswith("/accounting.non_electronic_invoices.create/invoke")]), 2)

@@ -87,7 +87,7 @@ def _safe_action_response(response):
     allowed = {
         "status", "actionId", "expiresAt", "confirmationRequired", "preview", "inputSummary",
         "resourceSummary", "entryId", "companyId", "attachmentIds", "attachmentCount",
-        "documentNumber", "documentDate", "warnings", "createdVia",
+        "documentNumber", "documentDate", "warnings", "createdVia", "errorCode",
     }
     return _compact({
         "result": {key: value for key, value in source.items() if key in allowed},
@@ -97,7 +97,7 @@ def _safe_action_response(response):
 
 def _minimal_state_response(response):
     result = response.get("result") if isinstance(response, dict) and isinstance(response.get("result"), dict) else {}
-    return {"result": {key: result[key] for key in ("status", "actionId", "expiresAt", "confirmationRequired") if key in result}}
+    return {"result": {key: result[key] for key in ("status", "actionId", "expiresAt", "confirmationRequired", "errorCode") if key in result}}
 
 
 def available_tools(args, **kwargs):
