@@ -147,7 +147,7 @@ DRAFT_CONTRACTS = {
         "inputStyle": "snake_case",
         "required": ["company_id", "document_number", "document_date", "net_amount", "vat_amount", "gross_amount", "pdf_paths", "operation_id"],
         "optional": ["accounting_contact_id", "partner_name", "partner_tax_code", "partner_vat_number", "due_date", "due_dates", "payment_allocations", "withholding_amount", "original_currency", "original_net_amount", "original_vat_amount", "original_gross_amount", "fx_rate_to_eur", "fx_rate_date", "fx_rate_source", "fx_conversion_note", "description", "notes"],
-        "notes": "pdf_paths must contain 1..5 regular PDF files below configured allowlisted roots; the agent cannot approve the resulting action",
+        "notes": "pdf_paths must contain 1..5 regular PDF files below configured allowlisted roots; the agent cannot approve the resulting action; for non-EUR invoices preserve document values in original_currency and original_*_amount fields and let REmanager derive EUR amounts",
     },
     "accounting.attachments.add": {
         "mode": "draft_with_confirmation",

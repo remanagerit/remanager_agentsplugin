@@ -109,6 +109,8 @@ Pass the exact `tool_name`, a camelCase `input`, `pdf_paths`, and one stable `op
 
 Use `reman_accounting_create_non_electronic_invoice`. Supply explicit invoice values, one to five absolute PDF paths under `REMAN_AGENT_ALLOWED_PDF_DIRS`, and a stable `operation_id`.
 
+For an invoice whose document currency is not EUR, always preserve the amounts printed on the document in `original_currency`, `original_net_amount`, `original_vat_amount`, and `original_gross_amount`. Use the document values for the required net/VAT/gross fields as well; REmanager applies its existing Accounting exchange-rate policy and stores the derived EUR amounts. Do not calculate or invent a separate exchange rate. Supply `fx_rate_to_eur` and its source/date only when the user explicitly provided an authoritative rate to use.
+
 Only accept PDF paths located under roots the user explicitly configured. Never substitute a broader parent directory, search unrelated folders, or treat a REmanager storage location as a local root.
 
 The connector:
