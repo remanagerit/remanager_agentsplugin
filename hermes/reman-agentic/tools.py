@@ -278,29 +278,29 @@ def _prepare_file_action(tool_name, input_data, pdf_paths, operation_id):
             "uploadedItems": [],
             "updatedAt": time.time(),
         }
-        if state.get("status") == "succeeded" and isinstance(state.get("response"), dict):
-            return state["response"]
-        if not state.get("uploadSessionId"):
+        prepared_action = state.get("status") == "succeeded" and isinstance(state.get("response"), dict)
+        if not prepared_action and not state.get("uploadSessionId"):
             session = client.create_upload_session(tool_name)
             state["uploadSessionId"] = session.get("sessionId")
             if not isinstance(state["uploadSessionId"], str):
                 raise RemanError("reman_response_invalid")
             state["updatedAt"] = time.time()
             _atomic_json(state_path, state)
-        uploaded = set(state.get("uploadedItems", []))
-        for index, item in enumerate(files):
-            item_key = "{}:{}".format(index, item["sha256"])
-            if item_key in uploaded:
-                continue
-            client.upload_pdf(state["uploadSessionId"], item["name"], item["content"])
-            uploaded.add(item_key)
-            state["uploadedItems"] = sorted(uploaded)
-            state["updatedAt"] = time.time()
-            _atomic_json(state_path, state)
-        if not _wait_for_ready(client, state["uploadSessionId"]):
-            state["updatedAt"] = time.time()
-            _atomic_json(state_path, state)
-            return {"result": {"status": "pending_scan", "operationId": operation_id, "retryAfterSeconds": 5}}
+        if not prepared_action:
+            uploaded = set(state.get("uploadedItems", []))
+            for index, item in enumerate(files):
+                item_key = "{}:{}".format(index, item["sha256"])
+                if item_key in uploaded:
+                    continue
+                client.upload_pdf(state["uploadSessionId"], item["name"], item["content"])
+                uploaded.add(item_key)
+                state["uploadedItems"] = sorted(uploaded)
+                state["updatedAt"] = time.time()
+                _atomic_json(state_path, state)
+            if not _wait_for_ready(client, state["uploadSessionId"]):
+                state["updatedAt"] = time.time()
+                _atomic_json(state_path, state)
+                return {"result": {"status": "pending_scan", "operationId": operation_id, "retryAfterSeconds": 5}}
         response = client.invoke(
             tool_name,
             "draft_with_confirmation",

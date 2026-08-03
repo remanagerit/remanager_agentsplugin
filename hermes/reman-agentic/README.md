@@ -78,7 +78,7 @@ For a complete Accounting document, call `accounting.documents.create_access_url
 
 Each URL is an opaque bearer capability. It may be opened repeatedly until `viewExpiresAt` or `originalExpiresAt`, but only for the user's current request. Never append the agent token, cookies, query data or custom authorization headers, never follow redirects, and never persist or log it. Generate a fresh pair after expiry or revocation.
 
-Mutations require a stable `operation_id`; the connector derives the idempotency key. The model cannot provide raw headers or select `direct`. File access is fail-closed when PDF roots are absent and rejects traversal, symlinks, non-regular files and evident TOCTOU changes. Uploaded files are not consumed until the Core scanner reports the entire session `ready`.
+Mutations require a stable `operation_id`; the connector derives the idempotency key. Reusing it checks the current state of the same action without uploading the PDF again. A replacement requested after a failed, rejected, cancelled or expired action must use a new unique `operation_id`. The model cannot provide raw headers or select `direct`. File access is fail-closed when PDF roots are absent and rejects traversal, symlinks, non-regular files and evident TOCTOU changes. Uploaded files are not consumed until the Core scanner reports the entire session `ready`.
 
 Transport failures alone are retryable. Policy, authorization, validation, quarantine and stale-state failures are non-retryable. HTTP error codes are exposed only from a bounded allowlist; arbitrary remote error text and request IDs are never returned to the model.
 
