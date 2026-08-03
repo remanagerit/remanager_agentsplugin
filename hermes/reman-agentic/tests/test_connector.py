@@ -31,6 +31,7 @@ class State:
     adversary_url = ""
     upload_status = "ready"
     upload_tool = CLIENT.FILE_CREATE_TOOL
+    file_action_status = "pending_confirmation"
 
 
 def discovered_items():
@@ -143,10 +144,11 @@ class Handler(BaseHTTPRequestHandler):
             }, "idempotentReplay": False, "requestId": "req-safe"})
         elif self.path.endswith("/accounting.non_electronic_invoices.create/invoke"):
             self._send(200, {"result": {
-                "status": "pending_confirmation",
+                "status": State.file_action_status,
                 "actionId": "action-invoice-1",
                 "expiresAt": "2026-07-20T12:00:00Z",
-                "confirmationRequired": True,
+                "confirmationRequired": State.file_action_status == "pending_confirmation",
+                "errorCode": "agentic_upload_session_unavailable" if State.file_action_status == "failed" else None,
                 "preview": {"attachmentUploadSessionPrepared": True},
                 "inputSummary": {"companyId": 7},
                 "resourceSummary": {"resourceType": "company", "resourceId": 7},
@@ -203,6 +205,7 @@ class ConnectorTest(unittest.TestCase):
         State.adversary_requests = []
         State.upload_status = "ready"
         State.upload_tool = CLIENT.FILE_CREATE_TOOL
+        State.file_action_status = "pending_confirmation"
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.allowed = self.root / "allowed"
@@ -289,10 +292,13 @@ class ConnectorTest(unittest.TestCase):
         self.assertIn("10800", skill)
         self.assertIn("reusable until", skill)
         self.assertIn("Messaging previews", skill)
+        self.assertIn("original_gross_amount", skill)
+        self.assertIn("REmanager applies its existing Accounting exchange-rate policy", skill)
+        self.assertIn("must not invent its own conversion", readme)
         self.assertIn("--upgrade", readme)
         self.assertIn("restart the Hermes process", readme)
-        self.assertIn("version: 1.2.2", plugin_manifest)
-        self.assertIn('Hermes-REman-Agentic/1.2.2', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
+        self.assertIn("version: 1.2.3", plugin_manifest)
+        self.assertIn('Hermes-REman-Agentic/1.2.3', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
 
     def test_official_production_url_is_the_default(self):
         os.environ.pop("REMAN_AGENT_BASE_URL", None)
@@ -480,6 +486,15 @@ class ConnectorTest(unittest.TestCase):
         self.assertEqual(len([item for item in State.requests if item[1] == "/api/v1/agentic/uploads/sessions"]), 1)
         self.assertEqual(len([item for item in State.requests if item[1].endswith("/items")]), 1)
         self.assertEqual(len([item for item in State.requests if item[1].endswith("/accounting.non_electronic_invoices.create/invoke")]), 1)
+
+        State.file_action_status = "failed"
+        third = json.loads(TOOLS.create_invoice(self.invoice_args()))
+        self.assertEqual(third["result"]["status"], "failed")
+        self.assertFalse(third["result"]["confirmationRequired"])
+        self.assertEqual(third["result"]["errorCode"], "agentic_upload_session_unavailable")
+        self.assertEqual(len([item for item in State.requests if item[1] == "/api/v1/agentic/uploads/sessions"]), 1)
+        self.assertEqual(len([item for item in State.requests if item[1].endswith("/items")]), 1)
+        self.assertEqual(len([item for item in State.requests if item[1].endswith("/accounting.non_electronic_invoices.create/invoke")]), 2)
 
     def test_quarantined_file_is_terminal(self):
         State.upload_status = "quarantined"

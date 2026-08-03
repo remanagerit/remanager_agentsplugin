@@ -86,7 +86,7 @@ Invoke non-file actions through `reman_accounting_prepare_action`:
 }
 ```
 
-`operation_id` must be a stable unique identifier for that intended action. Reuse it only for an equivalent retry. The connector derives the idempotency key and never accepts a model-controlled execution mode or raw idempotency header.
+`operation_id` must be a stable unique identifier for that intended action. Reuse it only while checking or retrying the same non-terminal action. The connector derives the idempotency key and never accepts a model-controlled execution mode or raw idempotency header.
 
 A successful preparation returns `pending_confirmation` and an `actionId`. Explain what was prepared and tell the user to review it in REmanager. Do not claim the business change is complete until the user confirms it and REmanager applies it.
 
@@ -108,6 +108,8 @@ Pass the exact `tool_name`, a camelCase `input`, `pdf_paths`, and one stable `op
 ## Non-electronic invoice with PDFs
 
 Use `reman_accounting_create_non_electronic_invoice`. Supply explicit invoice values, one to five absolute PDF paths under `REMAN_AGENT_ALLOWED_PDF_DIRS`, and a stable `operation_id`.
+
+For an invoice whose document currency is not EUR, always preserve the amounts printed on the document in `original_currency`, `original_net_amount`, `original_vat_amount`, and `original_gross_amount`. Use the document values for the required net/VAT/gross fields as well; REmanager applies its existing Accounting exchange-rate policy and stores the derived EUR amounts. Do not calculate or invent a separate exchange rate. Supply `fx_rate_to_eur` and its source/date only when the user explicitly provided an authoritative rate to use.
 
 Only accept PDF paths located under roots the user explicitly configured. Never substitute a broader parent directory, search unrelated folders, or treat a REmanager storage location as a local root.
 
@@ -150,6 +152,8 @@ The two URLs are separate capabilities. Do not open both automatically. Open or 
 
 - Policy, authentication, validation, quarantine, stale-state, and authorization errors are non-retryable.
 - Only transport failures are marked retryable. Retry an equivalent mutation with the same `operation_id`.
+- A replay can report the current action as `failed`, `rejected`, `cancelled`, `expired`, or `applied`. Never describe a terminal action as pending. If the user explicitly asks to prepare a replacement for a failed, rejected, cancelled, or expired action, use a new unique `operation_id`; do not reuse the terminal action's identifier.
+- A terminal replay may include a bounded public `errorCode`. Use it only to explain the outcome; never expose or infer database, storage, provider, path, token, or exception details.
 - `agentic_disabled` and `agentic_direct_disabled` are terminal policy blockers; never attempt a fallback.
 - Claim read success only from a successful REmanager result.
 - Claim mutation completion only after REmanager reports the action as applied following user confirmation. Preparation alone is not completion.

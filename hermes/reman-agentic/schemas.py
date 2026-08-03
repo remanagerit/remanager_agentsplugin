@@ -231,10 +231,22 @@ CREATE_INVOICE = {
             "vat_amount": {"type": "number", "minimum": 0},
             "gross_amount": {"type": "number", "minimum": 0},
             "withholding_amount": {"type": "number", "minimum": 0},
-            "original_currency": {"type": "string", "minLength": 3, "maxLength": 8},
-            "original_net_amount": {"type": "number", "minimum": 0},
-            "original_vat_amount": {"type": "number", "minimum": 0},
-            "original_gross_amount": {"type": "number", "minimum": 0},
+            "original_currency": {
+                "type": "string", "minLength": 3, "maxLength": 8,
+                "description": "ISO currency printed on a non-EUR document; REmanager derives the EUR accounting amounts.",
+            },
+            "original_net_amount": {
+                "type": "number", "minimum": 0,
+                "description": "Net amount printed on the document in original_currency.",
+            },
+            "original_vat_amount": {
+                "type": "number", "minimum": 0,
+                "description": "VAT or tax amount printed on the document in original_currency.",
+            },
+            "original_gross_amount": {
+                "type": "number", "minimum": 0,
+                "description": "Gross total printed on the document in original_currency.",
+            },
             "fx_rate_to_eur": {"type": "number", "exclusiveMinimum": 0},
             "fx_rate_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
             "fx_rate_source": {"type": "string", "maxLength": 64},

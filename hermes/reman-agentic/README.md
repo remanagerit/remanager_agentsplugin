@@ -68,6 +68,8 @@ The static 90-tool catalog is only an upper bound and never grants access. A too
 
 Document creation supports up to 12 structured due dates and up to 20 allocations to existing payments. REmanager derives the residual and paid/partial/open status from payment links; the plugin deliberately exposes no manually editable residual field. Generic file actions support `other_expense` and other document types, and can attach clean PDFs to existing Accounting resources.
 
+For non-EUR documents, Hermes must preserve the invoice currency and original net, VAT and gross amounts in the `original_*` fields. REmanager remains authoritative for the Accounting exchange-rate lookup and the derived EUR amounts; the connector must not invent its own conversion.
+
 Attachment metadata is available through bounded read tools. A download request returns a short-lived HTTPS capability URL after REmanager authorization checks. The URL is reusable until expiry so messaging previews cannot consume it before the user. It must be opened without the Agentic token, cookies or redirects and must never be persisted in a ledger or log.
 
 For a complete Accounting document, call `accounting.documents.create_access_urls` through `reman_accounting_read` with `companyId`, `documentId`, and optional `ttlSeconds`. The default and maximum TTL are three hours (`10800` seconds). REmanager returns a reusable `viewUrl` and, when an original attachment is available, a separate reusable `originalDownloadUrl`:
@@ -78,7 +80,7 @@ For a complete Accounting document, call `accounting.documents.create_access_url
 
 Each URL is an opaque bearer capability. It may be opened repeatedly until `viewExpiresAt` or `originalExpiresAt`, but only for the user's current request. Never append the agent token, cookies, query data or custom authorization headers, never follow redirects, and never persist or log it. Generate a fresh pair after expiry or revocation.
 
-Mutations require a stable `operation_id`; the connector derives the idempotency key. The model cannot provide raw headers or select `direct`. File access is fail-closed when PDF roots are absent and rejects traversal, symlinks, non-regular files and evident TOCTOU changes. Uploaded files are not consumed until the Core scanner reports the entire session `ready`.
+Mutations require a stable `operation_id`; the connector derives the idempotency key. Reusing it checks the current state of the same action without uploading the PDF again. A replacement requested after a failed, rejected, cancelled or expired action must use a new unique `operation_id`. The model cannot provide raw headers or select `direct`. File access is fail-closed when PDF roots are absent and rejects traversal, symlinks, non-regular files and evident TOCTOU changes. Uploaded files are not consumed until the Core scanner reports the entire session `ready`.
 
 Transport failures alone are retryable. Policy, authorization, validation, quarantine and stale-state failures are non-retryable. HTTP error codes are exposed only from a bounded allowlist; arbitrary remote error text and request IDs are never returned to the model.
 
