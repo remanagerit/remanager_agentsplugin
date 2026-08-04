@@ -68,6 +68,8 @@ The static 90-tool catalog is only an upper bound and never grants access. A too
 
 Document creation supports up to 12 structured due dates and up to 20 allocations to existing payments. REmanager derives the residual and paid/partial/open status from payment links; the plugin deliberately exposes no manually editable residual field. Generic file actions support `other_expense` and other document types, and can attach clean PDFs to existing Accounting resources.
 
+Payments can carry an explicit `insurancePolicyId`. Hermes must resolve the policy through the granted insurance-policy read tools and include the ID in `accounting.payments.create` or `accounting.payments.update` when the payment concerns that policy. REmanager enforces the same company and the delegating user's current policy permissions. The relationship must not be represented only in notes; `insurancePolicyId: null` removes it only through a user-confirmed update.
+
 For non-EUR documents, Hermes must preserve the invoice currency and original net, VAT and gross amounts in the `original_*` fields. REmanager remains authoritative for the Accounting exchange-rate lookup and the derived EUR amounts; the connector must not invent its own conversion.
 
 Attachment metadata is available through bounded read tools. A download request returns a short-lived HTTPS capability URL after REmanager authorization checks. The URL is reusable until expiry so messaging previews cannot consume it before the user. It must be opened without the Agentic token, cookies or redirects and must never be persisted in a ledger or log.

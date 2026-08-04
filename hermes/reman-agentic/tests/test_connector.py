@@ -297,8 +297,8 @@ class ConnectorTest(unittest.TestCase):
         self.assertIn("must not invent its own conversion", readme)
         self.assertIn("--upgrade", readme)
         self.assertIn("restart the Hermes process", readme)
-        self.assertIn("version: 1.2.3", plugin_manifest)
-        self.assertIn('Hermes-REman-Agentic/1.2.3', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
+        self.assertIn("version: 1.2.4", plugin_manifest)
+        self.assertIn('Hermes-REman-Agentic/1.2.4', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
 
     def test_official_production_url_is_the_default(self):
         os.environ.pop("REMAN_AGENT_BASE_URL", None)
@@ -323,6 +323,10 @@ class ConnectorTest(unittest.TestCase):
         contract = json.loads(TOOLS.tool_contract({"tool_name": "accounting.payments.create"}))
         self.assertEqual(contract["mode"], "draft_with_confirmation")
         self.assertIn("companyId", contract["required"])
+        self.assertIn("insurancePolicyId", contract["optional"])
+        payment_update = json.loads(TOOLS.tool_contract({"tool_name": "accounting.payments.update"}))
+        self.assertIn("insurancePolicyId", payment_update["optional"])
+        self.assertIn("null removes", payment_update["notes"])
         bank_import = json.loads(TOOLS.tool_contract({"tool_name": "accounting.bank_movements.import"}))
         self.assertEqual(bank_import["mode"], "draft_with_confirmation")
 
@@ -382,7 +386,7 @@ class ConnectorTest(unittest.TestCase):
     def test_generic_action_forces_draft_and_derives_stable_idempotency(self):
         args = {
             "tool_name": "accounting.payments.create",
-            "input": {"companyId": 7, "direction": "out", "paymentDate": "2026-07-20", "amount": 122},
+            "input": {"companyId": 7, "insurancePolicyId": 14, "direction": "out", "paymentDate": "2026-07-20", "amount": 122},
             "operation_id": "payment-42-v1",
         }
         first = json.loads(TOOLS.prepare_accounting_action(args))
@@ -392,6 +396,7 @@ class ConnectorTest(unittest.TestCase):
         invokes = [item for item in State.requests if item[1].endswith("/accounting.payments.create/invoke")]
         self.assertEqual(len(invokes), 2)
         self.assertTrue(all(item[2]["mode"] == "draft_with_confirmation" for item in invokes))
+        self.assertTrue(all(item[2]["input"]["insurancePolicyId"] == 14 for item in invokes))
         headers = [{key.lower(): value for key, value in item[3].items()} for item in invokes]
         self.assertEqual(headers[0]["x-reman-idempotency-key"], headers[1]["x-reman-idempotency-key"])
         self.assertNotIn("requestId", json.dumps(first))

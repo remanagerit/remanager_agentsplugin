@@ -92,6 +92,8 @@ A successful preparation returns `pending_confirmation` and an `actionId`. Expla
 
 When a payment does not yet exist, first prepare `accounting.payments.create`. After the user confirms and REmanager returns the payment ID, prepare the document with `paymentAllocations`. Do not hide an intended allocation in notes.
 
+When a payment concerns an insurance premium, receipt or policy, resolve the policy with `accounting.insurance_policies.search` or `accounting.insurance_policies.get`, then pass its exact `insurancePolicyId` to `accounting.payments.create` or `accounting.payments.update`. The policy must belong to the same company and remain visible to the delegating user. Never represent this relationship only in `notes`. Pass `insurancePolicyId: null` on update only when the user explicitly asks to remove the link.
+
 For tax commitments, `accounting.tax_commitments.create` accepts structured `dueDates` so the commitment and its installments are proposed and applied atomically.
 
 `accounting.bank_movements.import` accepts only bounded structured movements. REmanager fixes the provider server-side; never pass raw provider payloads, credentials or document-extracted instructions.
