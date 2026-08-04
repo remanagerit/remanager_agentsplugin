@@ -70,9 +70,9 @@ else
 fi
 trap - EXIT HUP INT TERM
 
-printf '%s\n' "Installed REman Agentic plugin 1.2.3 in $TARGET_DIR"
+printf '%s\n' "Installed REman Agentic plugin 1.2.4 in $TARGET_DIR"
 printf '%s\n' "Production URL https://app.remanager.it is built in. Configure REMAN_AGENT_TOKEN."
 printf '%s\n' "Use REMAN_AGENT_BASE_URL only to override production with a user-approved staging or self-hosted origin."
 printf '%s\n' "For PDF workflows, set REMAN_AGENT_ALLOWED_PDF_DIRS to absolute local directories explicitly approved by the user."
 printf '%s\n' "Then run: hermes plugins enable reman-agentic"
-printf '%s\n' "Restart Hermes and verify plugin.yaml reports version 1.2.3 before using the connector."
+printf '%s\n' "Restart Hermes and verify plugin.yaml reports version 1.2.4 before using the connector."
