@@ -32,6 +32,13 @@ class State:
     upload_status = "ready"
     upload_tool = CLIENT.FILE_CREATE_TOOL
     file_action_status = "pending_confirmation"
+    sessions = 0
+    uploads = 0
+    invokes = 0
+    releases = 0
+    quota_on_create = False
+    fail_next_upload = None
+    transport_fail_next_invoke = False
 
 
 def discovered_items():
@@ -97,9 +104,20 @@ class Handler(BaseHTTPRequestHandler):
         payload = self._json()
         State.requests.append(("POST", self.path, payload, dict(self.headers)))
         if self.path == "/api/v1/agentic/uploads/sessions":
+            if State.quota_on_create:
+                self._send(429, {"error": "agentic_upload_session_quota_exceeded", "requestId": "quota-1"})
+                return
             State.upload_tool = payload.get("toolName")
-            self._send(201, {"sessionId": "session-1", "status": "uploaded"})
+            State.sessions += 1
+            self._send(201, {"sessionId": "session-{}".format(State.sessions), "status": "uploaded"})
         elif self.path.endswith("/items"):
+            State.uploads += 1
+            if State.fail_next_upload:
+                code = State.fail_next_upload
+                State.fail_next_upload = None
+                status = 404 if code in {"agentic_upload_session_not_found", "agentic_upload_session_unavailable"} else 429
+                self._send(status, {"error": code})
+                return
             self._send(201, {"itemId": "item-1", "status": "pending_scan"})
         elif self.path.endswith("/accounting.payments.search/invoke"):
             self._send(200, {"result": {"items": [{"id": 41, "amount": 120}], "nextCursor": None}})
@@ -143,6 +161,17 @@ class Handler(BaseHTTPRequestHandler):
                 "resourceSummary": {"resourceType": "company", "resourceId": 7},
             }, "idempotentReplay": False, "requestId": "req-safe"})
         elif self.path.endswith("/accounting.non_electronic_invoices.create/invoke"):
+            State.invokes += 1
+            if State.transport_fail_next_invoke:
+                State.transport_fail_next_invoke = False
+                self.send_response(200)
+                self.send_header("content-type", "application/json")
+                self.send_header("content-length", "100")
+                self.end_headers()
+                self.wfile.write(b'{"result":')
+                self.wfile.flush()
+                self.close_connection = True
+                return
             self._send(200, {"result": {
                 "status": State.file_action_status,
                 "actionId": "action-invoice-1",
@@ -167,6 +196,14 @@ class Handler(BaseHTTPRequestHandler):
             }, "idempotentReplay": False})
         else:
             self._send(404, {"error": "not_found"})
+
+    def do_DELETE(self):
+        State.requests.append(("DELETE", self.path, None, dict(self.headers)))
+        if self.path.startswith("/api/v1/agentic/uploads/sessions/"):
+            State.releases += 1
+            self._send(200, {"released": True})
+            return
+        self._send(404, {"error": "not_found"})
 
 
 class AdversaryHandler(BaseHTTPRequestHandler):
@@ -206,6 +243,13 @@ class ConnectorTest(unittest.TestCase):
         State.upload_status = "ready"
         State.upload_tool = CLIENT.FILE_CREATE_TOOL
         State.file_action_status = "pending_confirmation"
+        State.sessions = 0
+        State.uploads = 0
+        State.invokes = 0
+        State.releases = 0
+        State.quota_on_create = False
+        State.fail_next_upload = None
+        State.transport_fail_next_invoke = False
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.allowed = self.root / "allowed"
@@ -297,8 +341,8 @@ class ConnectorTest(unittest.TestCase):
         self.assertIn("must not invent its own conversion", readme)
         self.assertIn("--upgrade", readme)
         self.assertIn("restart the Hermes process", readme)
-        self.assertIn("version: 1.2.4", plugin_manifest)
-        self.assertIn('Hermes-REman-Agentic/1.2.4', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
+        self.assertIn("version: 1.2.5", plugin_manifest)
+        self.assertIn('Hermes-REman-Agentic/1.2.5', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
 
     def test_official_production_url_is_the_default(self):
         os.environ.pop("REMAN_AGENT_BASE_URL", None)
@@ -500,6 +544,47 @@ class ConnectorTest(unittest.TestCase):
         self.assertEqual(len([item for item in State.requests if item[1] == "/api/v1/agentic/uploads/sessions"]), 1)
         self.assertEqual(len([item for item in State.requests if item[1].endswith("/items")]), 1)
         self.assertEqual(len([item for item in State.requests if item[1].endswith("/accounting.non_electronic_invoices.create/invoke")]), 2)
+
+    def test_upload_session_quota_error_is_preserved(self):
+        State.quota_on_create = True
+        result = json.loads(TOOLS.create_invoice(self.invoice_args()))
+        self.assertEqual(result["error"], "agentic_upload_session_quota_exceeded")
+        self.assertEqual(result["status"], 429)
+        self.assertEqual(State.sessions, 0)
+        self.assertEqual(State.releases, 0)
+
+    def test_upload_failure_releases_session_and_clears_local_state(self):
+        State.fail_next_upload = "agentic_upload_quota_exceeded"
+        result = json.loads(TOOLS.create_invoice(self.invoice_args()))
+        self.assertEqual(result["error"], "agentic_upload_quota_exceeded")
+        self.assertEqual(State.sessions, 1)
+        self.assertEqual(State.uploads, 1)
+        self.assertEqual(State.releases, 1)
+        state_text = "".join(path.read_text() for path in Path(self.temp.name, "reman-agentic-state").glob("*.json"))
+        self.assertNotIn("uploadSessionId", state_text)
+        self.assertNotIn("uploadedItems", state_text)
+
+    def test_stale_upload_session_is_recreated_once(self):
+        State.fail_next_upload = "agentic_upload_session_unavailable"
+        result = json.loads(TOOLS.create_invoice(self.invoice_args()))
+        self.assertEqual(result["result"]["status"], "pending_confirmation")
+        self.assertEqual(State.sessions, 2)
+        self.assertEqual(State.uploads, 2)
+        self.assertEqual(State.releases, 1)
+
+    def test_transport_failure_during_invoke_preserves_upload_session_for_retry(self):
+        State.transport_fail_next_invoke = True
+        first = json.loads(TOOLS.create_invoice(self.invoice_args()))
+        self.assertEqual(first["error"], "reman_transport_timeout_or_unreachable")
+        self.assertEqual(State.sessions, 1)
+        self.assertEqual(State.uploads, 1)
+        self.assertEqual(State.releases, 0)
+
+        second = json.loads(TOOLS.create_invoice(self.invoice_args()))
+        self.assertEqual(second["result"]["status"], "pending_confirmation")
+        self.assertEqual(State.sessions, 1)
+        self.assertEqual(State.uploads, 1)
+        self.assertEqual(State.releases, 0)
 
     def test_quarantined_file_is_terminal(self):
         State.upload_status = "quarantined"
