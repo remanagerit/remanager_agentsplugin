@@ -246,7 +246,7 @@ class RemanClient:
         body = None if payload is None else json.dumps(payload, separators=(",", ":")).encode("utf-8")
         headers = {
             "Accept": "application/json",
-            "User-Agent": "Hermes-REman-Agentic/1.2.4",
+            "User-Agent": "Hermes-REman-Agentic/1.2.5",
             "X-REman-Agent-Token": self.token,
         }
         if body is not None:
@@ -340,6 +340,12 @@ class RemanClient:
         if tool_name not in FILE_ACTION_TOOLS:
             raise RemanError("reman_upload_tool_not_approved")
         return self._request("POST", "/api/v1/agentic/uploads/sessions", {"toolName": tool_name})
+
+    def release_upload_session(self, session_id):
+        return self._request(
+            "DELETE",
+            "/api/v1/agentic/uploads/sessions/{}".format(urllib.parse.quote(session_id, safe="")),
+        )
 
     def upload_pdf(self, session_id, file_name, content):
         return self._request(

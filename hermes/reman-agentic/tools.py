@@ -16,6 +16,7 @@ from .client import (
     FILE_CREATE_TOOL,
     RemanClient,
     RemanError,
+    RemanTransportError,
 )
 from .file_access import allowed_pdf_roots, read_allowed_pdf
 
@@ -23,6 +24,7 @@ from .file_access import allowed_pdf_roots, read_allowed_pdf
 ACCOUNTING_TOOL = re.compile(r"^accounting\.[a-z0-9_.]+$")
 OPERATION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 STATE_TTL_SECONDS = 7 * 24 * 60 * 60
+STALE_UPLOAD_SESSION_ERRORS = {"agentic_upload_session_not_found", "agentic_upload_session_unavailable"}
 RESERVED_AGENT_INPUT_KEYS = {
     "agentId", "delegatingUserId", "executionMode", "grantVersion", "isExternalAgent",
     "isSystemAdmin", "mode", "scopes", "teamId", "uploadSessionId", "userId",
@@ -203,6 +205,26 @@ def _load_state(path):
     return None
 
 
+def _clear_upload_session_state(state, state_path):
+    state.pop("uploadSessionId", None)
+    state.pop("uploadedItems", None)
+    state["updatedAt"] = time.time()
+    _atomic_json(state_path, state)
+
+
+def _release_upload_session(client, state, state_path):
+    session_id = state.get("uploadSessionId")
+    if not session_id:
+        return
+    released = True
+    try:
+        client.release_upload_session(session_id)
+    except RemanError as error:
+        released = error.code in {"not_found", "agentic_upload_session_not_found", "agentic_upload_session_unavailable"}
+    if released:
+        _clear_upload_session_state(state, state_path)
+
+
 def _positive_limit(value, fallback):
     return int(value) if isinstance(value, (int, float)) and int(value) > 0 else fallback
 
@@ -279,34 +301,46 @@ def _prepare_file_action(tool_name, input_data, pdf_paths, operation_id):
             "updatedAt": time.time(),
         }
         prepared_action = state.get("status") == "succeeded" and isinstance(state.get("response"), dict)
-        if not prepared_action and not state.get("uploadSessionId"):
-            session = client.create_upload_session(tool_name)
-            state["uploadSessionId"] = session.get("sessionId")
-            if not isinstance(state["uploadSessionId"], str):
-                raise RemanError("reman_response_invalid")
-            state["updatedAt"] = time.time()
-            _atomic_json(state_path, state)
-        if not prepared_action:
-            uploaded = set(state.get("uploadedItems", []))
-            for index, item in enumerate(files):
-                item_key = "{}:{}".format(index, item["sha256"])
-                if item_key in uploaded:
+        attempts = 0
+        while True:
+            attempts += 1
+            if not prepared_action and not state.get("uploadSessionId"):
+                session = client.create_upload_session(tool_name)
+                state["uploadSessionId"] = session.get("sessionId")
+                if not isinstance(state["uploadSessionId"], str):
+                    raise RemanError("reman_response_invalid")
+                state["updatedAt"] = time.time()
+                _atomic_json(state_path, state)
+            try:
+                if not prepared_action:
+                    uploaded = set(state.get("uploadedItems", []))
+                    for index, item in enumerate(files):
+                        item_key = "{}:{}".format(index, item["sha256"])
+                        if item_key in uploaded:
+                            continue
+                        client.upload_pdf(state["uploadSessionId"], item["name"], item["content"])
+                        uploaded.add(item_key)
+                        state["uploadedItems"] = sorted(uploaded)
+                        state["updatedAt"] = time.time()
+                        _atomic_json(state_path, state)
+                    if not _wait_for_ready(client, state["uploadSessionId"]):
+                        state["updatedAt"] = time.time()
+                        _atomic_json(state_path, state)
+                        return {"result": {"status": "pending_scan", "operationId": operation_id, "retryAfterSeconds": 5}}
+                response = client.invoke(
+                    tool_name,
+                    "draft_with_confirmation",
+                    {**input_data, "uploadSessionId": state["uploadSessionId"]},
+                    state["idempotencyKey"],
+                )
+                break
+            except RemanTransportError:
+                raise
+            except RemanError as error:
+                _release_upload_session(client, state, state_path)
+                if attempts == 1 and error.code in STALE_UPLOAD_SESSION_ERRORS:
                     continue
-                client.upload_pdf(state["uploadSessionId"], item["name"], item["content"])
-                uploaded.add(item_key)
-                state["uploadedItems"] = sorted(uploaded)
-                state["updatedAt"] = time.time()
-                _atomic_json(state_path, state)
-            if not _wait_for_ready(client, state["uploadSessionId"]):
-                state["updatedAt"] = time.time()
-                _atomic_json(state_path, state)
-                return {"result": {"status": "pending_scan", "operationId": operation_id, "retryAfterSeconds": 5}}
-        response = client.invoke(
-            tool_name,
-            "draft_with_confirmation",
-            {**input_data, "uploadSessionId": state["uploadSessionId"]},
-            state["idempotencyKey"],
-        )
+                raise
         safe = _safe_action_response(response)
         state.update({"status": "succeeded", "response": _minimal_state_response(safe), "updatedAt": time.time()})
         _atomic_json(state_path, state)

@@ -86,7 +86,7 @@ Invoke non-file actions through `reman_accounting_prepare_action`:
 }
 ```
 
-`operation_id` must be a stable unique identifier for that intended action. Reuse it only while checking or retrying the same non-terminal action. The connector derives the idempotency key and never accepts a model-controlled execution mode or raw idempotency header.
+`operation_id` must be a stable unique identifier for that intended action. Reuse it only while checking or retrying the same non-terminal action. The connector derives the idempotency key and never accepts a model-controlled execution mode or raw idempotency header. If upload setup fails before REmanager accepts the pending action, Hermes releases the abandoned upload session where possible; if action invocation has a transport failure, retry with the same `operation_id` because the pending action may already exist.
 
 A successful preparation returns `pending_confirmation` and an `actionId`. Explain what was prepared and tell the user to review it in REmanager. Do not claim the business change is complete until the user confirms it and REmanager applies it.
 
