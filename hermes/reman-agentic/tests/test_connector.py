@@ -380,8 +380,11 @@ class ConnectorTest(unittest.TestCase):
         self.assertIn("must not invent its own conversion", readme)
         self.assertIn("--upgrade", readme)
         self.assertIn("restart the Hermes process", readme)
-        self.assertIn("version: 1.2.6", plugin_manifest)
-        self.assertIn('Hermes-REman-Agentic/1.2.6', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
+        self.assertIn("version: 1.2.7", plugin_manifest)
+        self.assertIn('Hermes-REman-Agentic/1.2.7', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
+        self.assertIn("attachmentRole", readme)
+        self.assertIn("payment_form", skill)
+        self.assertIn("receipt", skill)
 
     def test_official_production_url_is_the_default(self):
         os.environ.pop("REMAN_AGENT_BASE_URL", None)

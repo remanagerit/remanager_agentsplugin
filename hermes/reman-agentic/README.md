@@ -86,6 +86,8 @@ Mutations require a stable `operation_id`; the connector derives the idempotency
 
 For file actions, pass all PDFs for the same target in one call when the server file policy allows it. For example, multiple quietance PDFs for one insurance policy or payment should be one `accounting.attachments.add` proposal with multiple `pdf_paths`, not separate upload sessions per file.
 
+For fiscal installment attachments, use `targetType: "tax_installment"` and set `attachmentRole` when the user identifies the document channel: `payment_form` for the payment form, `receipt` for the paid receipt, or omit it/use `general` only for a generic installment attachment. Do not pass `attachmentRole` for other target types.
+
 Transport failures are retryable. Server `agentic_rate_limit_exceeded` responses are retryable only after the returned `retryAfter` delay. Policy, authorization, validation, quarantine, stale-state and quota failures are non-retryable. Hermes preserves bounded REmanager diagnostic fields for upload/rate/pending-action limits: `category`, `reason`, `scope`, `operation`, `userAction`, `message` and `retryAfter`. Arbitrary remote error text is never returned to the model.
 
 The bundled skill is available as `reman-agentic:reman-accounting`.
