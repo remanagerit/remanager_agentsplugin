@@ -107,6 +107,8 @@ Use `reman_accounting_prepare_file_action` for:
 
 Pass the exact `tool_name`, a camelCase `input`, `pdf_paths`, and one stable `operation_id`. The same file-root, malware-scan, retry and confirmation rules described below apply.
 
+If multiple PDFs belong to the same target document, payment, insurance policy, tax commitment/installment, loan/installment or DDT, group them in one `pdf_paths` array and create one proposal. Do not call the file-action tool once per PDF for the same target unless the server-reported file policy rejects the combined batch. This keeps one Core upload session, one malware-scan batch and one approval task for the user.
+
 ## Non-electronic invoice with PDFs
 
 Use `reman_accounting_create_non_electronic_invoice`. Supply explicit invoice values, one to five absolute PDF paths under `REMAN_AGENT_ALLOWED_PDF_DIRS`, and a stable `operation_id`.
@@ -153,7 +155,13 @@ The two URLs are separate capabilities. Do not open both automatically. Open or 
 ## Errors and completion
 
 - Policy, authentication, validation, quarantine, stale-state, and authorization errors are non-retryable.
-- Only transport failures are marked retryable. Retry an equivalent mutation with the same `operation_id`.
+- Transport failures are retryable. A server `agentic_rate_limit_exceeded` response is retryable only after the returned `retryAfter` delay; do not retry faster than REmanager asks.
+- Quota errors are not document validation errors. Keep the exact bounded code in the final answer:
+  - `agentic_upload_session_quota_exceeded`: too many active unheld upload sessions for this agent/user/team; release abandoned pre-action sessions where possible and retry later.
+  - `agentic_upload_file_quota_exceeded`: temporary upload file-count quota is full.
+  - `agentic_upload_byte_quota_exceeded`: temporary upload byte quota is full.
+  - `agentic_upload_session_limit_exceeded`: a single upload session exceeds its file-count or byte-size policy; split only if the server policy requires it.
+  - `agentic_pending_action_limit_exceeded`: the user has too many pending Agentic proposals; ask the user to approve, reject, cancel or hide completed items in REmanager, subject to the system-admin configured limit.
 - A replay can report the current action as `failed`, `rejected`, `cancelled`, `expired`, or `applied`. Never describe a terminal action as pending. If the user explicitly asks to prepare a replacement for a failed, rejected, cancelled, or expired action, use a new unique `operation_id`; do not reuse the terminal action's identifier.
 - A terminal replay may include a bounded public `errorCode`. Use it only to explain the outcome; never expose or infer database, storage, provider, path, token, or exception details.
 - `agentic_disabled` and `agentic_direct_disabled` are terminal policy blockers; never attempt a fallback.
