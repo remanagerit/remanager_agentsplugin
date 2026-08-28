@@ -152,10 +152,15 @@ APPROVED_REMOTE_ERROR_CODES = frozenset({
     "agentic_idempotency_conflict",
     "agentic_idempotency_key_required",
     "agentic_internal_error",
+    "agentic_pending_action_limit_exceeded",
     "agentic_upload_base64_invalid",
+    "agentic_upload_byte_quota_exceeded",
     "agentic_upload_concurrency_exceeded",
+    "agentic_upload_file_quota_exceeded",
     "agentic_upload_item_quota_exceeded",
     "agentic_upload_quota_exceeded",
+    "agentic_upload_session_limit_exceeded",
+    "agentic_upload_session_locked",
     "agentic_upload_session_not_found",
     "agentic_upload_session_quota_exceeded",
     "agentic_upload_session_unavailable",
@@ -195,13 +200,83 @@ def _normalize_remote_error_code(value):
     return value if value in APPROVED_REMOTE_ERROR_CODES else "reman_http_error"
 
 
+DIAGNOSTIC_TOKEN = re.compile(r"^[a-z][a-z0-9_]{1,79}$")
+DIAGNOSTIC_OPERATIONS = frozenset({"draft_with_confirmation", "invoke", "upload_item", "upload_session"})
+DIAGNOSTIC_KEYS = ("category", "reason", "scope", "operation", "userAction")
+
+
+def _diagnostic_token(value, allowed=None):
+    if not isinstance(value, str) or not DIAGNOSTIC_TOKEN.fullmatch(value):
+        return None
+    if allowed is not None and value not in allowed:
+        return None
+    return value
+
+
+def _diagnostic_message(value):
+    if not isinstance(value, str):
+        return None
+    normalized = " ".join(value.split())
+    if not normalized or len(normalized) > 240:
+        return None
+    lowered = normalized.lower()
+    if any(marker in lowered for marker in ("token", "secret", "password", "storage_key", "contentbase64")):
+        return None
+    return normalized
+
+
+def _retry_after(value):
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed < 1 or parsed > 24 * 60 * 60:
+        return None
+    return parsed
+
+
+def _remote_error_details(failure, headers, code):
+    if code == "reman_http_error":
+        return {}
+    details = {}
+    for key in DIAGNOSTIC_KEYS:
+        allowed = DIAGNOSTIC_OPERATIONS if key == "operation" else None
+        normalized = _diagnostic_token(failure.get(key), allowed)
+        if normalized:
+            details[key] = normalized
+    message = _diagnostic_message(failure.get("message"))
+    if message:
+        details["message"] = message
+    request_id = _diagnostic_message(failure.get("requestId"))
+    if request_id:
+        details["request_id"] = request_id
+    retry_after = _retry_after(failure.get("retryAfter"))
+    if retry_after is None:
+        retry_after = _retry_after(headers.get("Retry-After") or headers.get("retry-after"))
+    if retry_after is not None:
+        details["retry_after"] = retry_after
+    if isinstance(failure.get("retryable"), bool):
+        details["retryable"] = failure["retryable"]
+    return details
+
+
 class RemanError(Exception):
-    def __init__(self, code, status=None, request_id=None, retryable=False):
+    def __init__(
+        self, code, status=None, request_id=None, retryable=False, category=None, reason=None,
+        scope=None, operation=None, userAction=None, message=None, retry_after=None
+    ):
         super().__init__(code)
         self.code = str(code)
         self.status = status
         self.request_id = request_id
         self.retryable = bool(retryable)
+        self.category = category
+        self.reason = reason
+        self.scope = scope
+        self.operation = operation
+        self.userAction = userAction
+        self.message = message
+        self.retry_after = retry_after
 
     def public(self):
         result = {"error": self.code, "retryable": self.retryable}
@@ -209,6 +284,12 @@ class RemanError(Exception):
             result["status"] = self.status
         if self.request_id:
             result["requestId"] = self.request_id
+        for attr in ("category", "reason", "scope", "operation", "userAction", "message"):
+            value = getattr(self, attr)
+            if value:
+                result[attr] = value
+        if self.retry_after is not None:
+            result["retryAfter"] = self.retry_after
         return result
 
 
@@ -246,7 +327,7 @@ class RemanClient:
         body = None if payload is None else json.dumps(payload, separators=(",", ":")).encode("utf-8")
         headers = {
             "Accept": "application/json",
-            "User-Agent": "Hermes-REman-Agentic/1.2.5",
+            "User-Agent": "Hermes-REman-Agentic/1.2.6",
             "X-REman-Agent-Token": self.token,
         }
         if body is not None:
@@ -267,7 +348,8 @@ class RemanClient:
                     failure = {}
                 if not isinstance(failure, dict):
                     failure = {}
-                raise RemanError(_normalize_remote_error_code(failure.get("error")), error.code) from None
+                code = _normalize_remote_error_code(failure.get("error"))
+                raise RemanError(code, error.code, **_remote_error_details(failure, error.headers, code)) from None
             finally:
                 error.close()
         except (

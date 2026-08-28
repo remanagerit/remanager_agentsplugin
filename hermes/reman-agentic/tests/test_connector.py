@@ -38,6 +38,7 @@ class State:
     releases = 0
     quota_on_create = False
     fail_next_upload = None
+    fail_next_invoke = None
     transport_fail_next_invoke = False
 
 
@@ -69,10 +70,12 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("content-length", "0"))
         return json.loads(self.rfile.read(length)) if length else None
 
-    def _send(self, status, payload):
+    def _send(self, status, payload, headers=None):
         body = json.dumps(payload).encode()
         self.send_response(status)
         self.send_header("content-type", "application/json")
+        for key, value in (headers or {}).items():
+            self.send_header(key, value)
         self.send_header("content-length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -105,7 +108,17 @@ class Handler(BaseHTTPRequestHandler):
         State.requests.append(("POST", self.path, payload, dict(self.headers)))
         if self.path == "/api/v1/agentic/uploads/sessions":
             if State.quota_on_create:
-                self._send(429, {"error": "agentic_upload_session_quota_exceeded", "requestId": "quota-1"})
+                self._send(429, {
+                    "error": "agentic_upload_session_quota_exceeded",
+                    "requestId": "quota-1",
+                    "category": "quota",
+                    "reason": "active_upload_sessions_full",
+                    "scope": "delegating_user_agent_team",
+                    "operation": "upload_session",
+                    "retryable": False,
+                    "userAction": "complete_or_release_upload_sessions",
+                    "message": "L'agente ha troppe sessioni upload aperte per questo utente e team.",
+                })
                 return
             State.upload_tool = payload.get("toolName")
             State.sessions += 1
@@ -116,7 +129,17 @@ class Handler(BaseHTTPRequestHandler):
                 code = State.fail_next_upload
                 State.fail_next_upload = None
                 status = 404 if code in {"agentic_upload_session_not_found", "agentic_upload_session_unavailable"} else 429
-                self._send(status, {"error": code})
+                body = {
+                    "error": code,
+                    "category": "quota" if "quota" in code or "limit" in code else "rate_limit",
+                    "reason": "single_upload_session_limit_exceeded" if code == "agentic_upload_session_limit_exceeded" else "temporary_file_quota_full",
+                    "scope": "upload_session" if code == "agentic_upload_session_limit_exceeded" else "delegating_user_agent_team",
+                    "operation": "upload_item",
+                    "userAction": "complete_or_release_upload_sessions",
+                }
+                if code == "agentic_rate_limit_exceeded":
+                    body.update({"reason": "request_rate_limit_exceeded", "retryable": True, "retryAfter": 17})
+                self._send(status, body, {"Retry-After": "17"} if code == "agentic_rate_limit_exceeded" else None)
                 return
             self._send(201, {"itemId": "item-1", "status": "pending_scan"})
         elif self.path.endswith("/accounting.payments.search/invoke"):
@@ -162,6 +185,19 @@ class Handler(BaseHTTPRequestHandler):
             }, "idempotentReplay": False, "requestId": "req-safe"})
         elif self.path.endswith("/accounting.non_electronic_invoices.create/invoke"):
             State.invokes += 1
+            if State.fail_next_invoke:
+                code = State.fail_next_invoke
+                State.fail_next_invoke = None
+                self._send(429, {
+                    "error": code,
+                    "category": "quota",
+                    "reason": "pending_confirmation_backlog_full",
+                    "scope": "delegating_user_agent_team",
+                    "operation": "draft_with_confirmation",
+                    "retryable": False,
+                    "userAction": "review_or_dismiss_pending_actions",
+                })
+                return
             if State.transport_fail_next_invoke:
                 State.transport_fail_next_invoke = False
                 self.send_response(200)
@@ -249,6 +285,7 @@ class ConnectorTest(unittest.TestCase):
         State.releases = 0
         State.quota_on_create = False
         State.fail_next_upload = None
+        State.fail_next_invoke = None
         State.transport_fail_next_invoke = False
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
@@ -256,6 +293,8 @@ class ConnectorTest(unittest.TestCase):
         self.allowed.mkdir()
         self.pdf = self.allowed / "invoice.pdf"
         self.pdf.write_bytes(b"%PDF-1.4\n%%EOF\n")
+        self.receipt_pdf = self.allowed / "receipt.pdf"
+        self.receipt_pdf.write_bytes(b"%PDF-1.4\nreceipt\n%%EOF\n")
         os.environ["HERMES_HOME"] = self.temp.name
         os.environ["REMAN_AGENT_BASE_URL"] = State.base_url
         os.environ["REMAN_AGENT_TOKEN"] = "secret-agent-token"
@@ -341,8 +380,8 @@ class ConnectorTest(unittest.TestCase):
         self.assertIn("must not invent its own conversion", readme)
         self.assertIn("--upgrade", readme)
         self.assertIn("restart the Hermes process", readme)
-        self.assertIn("version: 1.2.5", plugin_manifest)
-        self.assertIn('Hermes-REman-Agentic/1.2.5', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
+        self.assertIn("version: 1.2.6", plugin_manifest)
+        self.assertIn('Hermes-REman-Agentic/1.2.6', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
 
     def test_official_production_url_is_the_default(self):
         os.environ.pop("REMAN_AGENT_BASE_URL", None)
@@ -506,6 +545,18 @@ class ConnectorTest(unittest.TestCase):
         self.assertNotIn("pdf_paths", invoke[2]["input"])
         self.assertIn("uploadSessionId", invoke[2]["input"])
 
+    def test_multiple_pdfs_for_same_target_use_one_upload_session_and_one_action(self):
+        result = json.loads(TOOLS.prepare_accounting_file_action({
+            "tool_name": "accounting.attachments.add",
+            "input": {"companyId": 7, "targetType": "payment", "targetId": 41, "description": "Quietanze"},
+            "pdf_paths": [str(self.pdf), str(self.receipt_pdf)],
+            "operation_id": "attachment-payment-41-batch-v1",
+        }))
+        self.assertEqual(result["result"]["status"], "pending_confirmation")
+        self.assertEqual(len([item for item in State.requests if item[1] == "/api/v1/agentic/uploads/sessions"]), 1)
+        self.assertEqual(len([item for item in State.requests if item[1].endswith("/items")]), 2)
+        self.assertEqual(len([item for item in State.requests if item[1].endswith("/accounting.attachments.add/invoke")]), 1)
+
     def test_invoice_wrapper_maps_multiple_due_dates_and_existing_payment_allocations(self):
         args = self.invoice_args()
         args["due_dates"] = [
@@ -550,6 +601,11 @@ class ConnectorTest(unittest.TestCase):
         result = json.loads(TOOLS.create_invoice(self.invoice_args()))
         self.assertEqual(result["error"], "agentic_upload_session_quota_exceeded")
         self.assertEqual(result["status"], 429)
+        self.assertEqual(result["category"], "quota")
+        self.assertEqual(result["reason"], "active_upload_sessions_full")
+        self.assertEqual(result["operation"], "upload_session")
+        self.assertEqual(result["userAction"], "complete_or_release_upload_sessions")
+        self.assertIn("sessioni upload", result["message"])
         self.assertEqual(State.sessions, 0)
         self.assertEqual(State.releases, 0)
 
@@ -563,6 +619,42 @@ class ConnectorTest(unittest.TestCase):
         state_text = "".join(path.read_text() for path in Path(self.temp.name, "reman-agentic-state").glob("*.json"))
         self.assertNotIn("uploadSessionId", state_text)
         self.assertNotIn("uploadedItems", state_text)
+
+    def test_current_upload_quota_codes_are_preserved_with_operation(self):
+        for code in (
+            "agentic_upload_file_quota_exceeded",
+            "agentic_upload_byte_quota_exceeded",
+            "agentic_upload_session_limit_exceeded",
+        ):
+            State.requests = []
+            State.sessions = 0
+            State.uploads = 0
+            State.releases = 0
+            State.fail_next_upload = code
+            args = self.invoice_args()
+            args["operation_id"] = code + "-v1"
+            result = json.loads(TOOLS.create_invoice(args))
+            self.assertEqual(result["error"], code)
+            self.assertEqual(result["operation"], "upload_item")
+            self.assertEqual(State.releases, 1)
+
+    def test_rate_limit_exposes_retry_after_and_pending_limit_is_preserved(self):
+        State.fail_next_upload = "agentic_rate_limit_exceeded"
+        result = json.loads(TOOLS.create_invoice(self.invoice_args()))
+        self.assertEqual(result["error"], "agentic_rate_limit_exceeded")
+        self.assertTrue(result["retryable"])
+        self.assertEqual(result["operation"], "upload_item")
+        self.assertEqual(result["retryAfter"], 17)
+
+        State.requests = []
+        State.fail_next_invoke = "agentic_pending_action_limit_exceeded"
+        args = self.invoice_args()
+        args["operation_id"] = "pending-limit-v1"
+        result = json.loads(TOOLS.create_invoice(args))
+        self.assertEqual(result["error"], "agentic_pending_action_limit_exceeded")
+        self.assertEqual(result["operation"], "draft_with_confirmation")
+        self.assertEqual(result["userAction"], "review_or_dismiss_pending_actions")
+        self.assertEqual(State.releases, 2)
 
     def test_stale_upload_session_is_recreated_once(self):
         State.fail_next_upload = "agentic_upload_session_unavailable"
@@ -624,7 +716,7 @@ class ConnectorTest(unittest.TestCase):
         normal = json.loads(TOOLS.invoke_accounting_read({
             "tool_name": "accounting.documents.search", "input": {"companyId": 7, "types": ["invoice_in"]}
         }))
-        self.assertEqual(normal, {"error": "agentic_disabled", "retryable": False, "status": 503})
+        self.assertEqual(normal, {"error": "agentic_disabled", "retryable": False, "status": 503, "requestId": "req-policy-1"})
         output = TOOLS.invoke_accounting_read({
             "tool_name": "accounting.documents.search",
             "input": {"companyId": 7, "types": ["invoice_in"], "adversarial": "error"},
