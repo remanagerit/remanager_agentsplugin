@@ -154,8 +154,8 @@ DRAFT_CONTRACTS = {
         "connectorTool": "reman_accounting_prepare_file_action",
         "inputStyle": "camelCase",
         "required": ["companyId", "targetType", "targetId", "pdf_paths", "operation_id"],
-        "optional": ["description"],
-        "notes": "Use tool_name accounting.attachments.add; targetType: document|payment|delivery_note|tax_commitment|tax_installment|loan|loan_installment|insurance_policy; attaches 1..5 clean PDFs after user confirmation",
+        "optional": ["description", "attachmentRole"],
+        "notes": "Use tool_name accounting.attachments.add; targetType: document|payment|delivery_note|tax_commitment|tax_installment|loan|loan_installment|insurance_policy; attaches 1..5 clean PDFs after user confirmation. For targetType tax_installment only, attachmentRole may be general, payment_form or receipt so payment forms and receipts appear in the matching REmanager UI channel.",
     },
 }
 
