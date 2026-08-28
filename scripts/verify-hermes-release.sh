@@ -27,7 +27,8 @@ INSTALLED="$TEMP_ROOT/hermes-home/plugins/reman-agentic"
 printf '%s\n' "stale" > "$INSTALLED/stale-version-marker"
 HERMES_HOME="$TEMP_ROOT/hermes-home" "$TEMP_ROOT/unpacked/reman-agentic/install.sh" --upgrade
 test ! -e "$INSTALLED/stale-version-marker"
-grep -q '^version: 1.2.6$' "$INSTALLED/plugin.yaml"
+EXPECTED_VERSION=$(python3 -c 'import pathlib,re; print(re.search(r"^version: (.+)$", pathlib.Path("'"$HERMES"'", "plugin.yaml").read_text(), re.M).group(1))')
+grep -q "^version: $EXPECTED_VERSION\$" "$INSTALLED/plugin.yaml"
 python3 - "$INSTALLED" <<'PY'
 import importlib.util
 import sys
