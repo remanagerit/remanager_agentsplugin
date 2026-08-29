@@ -380,11 +380,26 @@ class ConnectorTest(unittest.TestCase):
         self.assertIn("must not invent its own conversion", readme)
         self.assertIn("--upgrade", readme)
         self.assertIn("restart the Hermes process", readme)
-        self.assertIn("version: 1.2.7", plugin_manifest)
-        self.assertIn('Hermes-REman-Agentic/1.2.7', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
+        self.assertIn("version: 1.2.8", plugin_manifest)
+        self.assertIn('Hermes-REman-Agentic/1.2.8', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
         self.assertIn("attachmentRole", readme)
+        self.assertIn("attachmentRole", skill)
         self.assertIn("payment_form", skill)
         self.assertIn("receipt", skill)
+
+    def test_tax_installment_attachment_role_contracts(self):
+        add_contract = CATALOG.contract_for("accounting.attachments.add")
+        self.assertIn("attachmentRole", add_contract["optional"])
+        self.assertIn("payment_form", add_contract["notes"])
+        self.assertIn("receipt", add_contract["notes"])
+        search_contract = CATALOG.contract_for("accounting.attachments.search")
+        get_contract = CATALOG.contract_for("accounting.attachments.get")
+        download_contract = CATALOG.contract_for("accounting.attachments.create_download_url")
+        self.assertIn("attachmentRole", search_contract["optional"])
+        self.assertIn("attachmentRole", get_contract["optional"])
+        self.assertIn("attachmentRole", download_contract["optional"])
+        self.assertIn("payment_form", search_contract["notes"])
+        self.assertIn("receipt", download_contract["notes"])
 
     def test_official_production_url_is_the_default(self):
         os.environ.pop("REMAN_AGENT_BASE_URL", None)
