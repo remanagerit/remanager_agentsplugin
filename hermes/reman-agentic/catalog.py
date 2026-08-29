@@ -19,11 +19,16 @@ READ_CONTRACTS = {
     "accounting.attachments.create_download_url": _contract(
         "read",
         ("companyId", "targetType", "targetId", "attachmentId"),
-        ("ttlSeconds",),
-        "Returns an HTTPS URL reusable until its maximum three-hour expiry after resource and capability checks; never attach the agent token to that URL",
+        ("ttlSeconds", "attachmentRole"),
+        "Returns an HTTPS URL reusable until its maximum three-hour expiry after resource and capability checks; never attach the agent token to that URL. For targetType tax_installment, payment forms use attachmentRole payment_form, receipts use receipt and legacy generic files use general",
     ),
-    "accounting.attachments.get": _contract("read", ("companyId", "targetType", "targetId", "attachmentId")),
-    "accounting.attachments.search": _contract("read", ("companyId", "targetType", "targetId"), ("limit", "cursor")),
+    "accounting.attachments.get": _contract("read", ("companyId", "targetType", "targetId", "attachmentId"), ("attachmentRole",), "For targetType tax_installment, use attachmentRole payment_form, receipt or general to match the separate Administration UI panels"),
+    "accounting.attachments.search": _contract(
+        "read",
+        ("companyId", "targetType", "targetId"),
+        ("attachmentRole", "limit", "cursor"),
+        "For targetType tax_installment, filter by attachmentRole payment_form, receipt or general to match the separate Administration UI panels",
+    ),
     "accounting.companies.list": _contract("read", (), ("query", "limit")),
     "accounting.contact_people.get": _contract("read", ("companyId", "contactPersonId")),
     "accounting.contact_people.search": _contract("read", ("companyId",), ("partnerId", "query", "limit", "cursor")),
@@ -155,7 +160,7 @@ DRAFT_CONTRACTS = {
         "inputStyle": "camelCase",
         "required": ["companyId", "targetType", "targetId", "pdf_paths", "operation_id"],
         "optional": ["description", "attachmentRole"],
-        "notes": "Use tool_name accounting.attachments.add; targetType: document|payment|delivery_note|tax_commitment|tax_installment|loan|loan_installment|insurance_policy; attaches 1..5 clean PDFs after user confirmation. For targetType tax_installment only, attachmentRole may be general, payment_form or receipt so payment forms and receipts appear in the matching REmanager UI channel.",
+        "notes": "Use tool_name accounting.attachments.add; targetType: document|payment|delivery_note|tax_commitment|tax_installment|loan|loan_installment|insurance_policy; attaches 1..5 clean PDFs after user confirmation. For targetType tax_installment, attachmentRole is required by workflow: payment_form for F24/bollettino/payment form, receipt for payment receipt/quietance, general only for legacy generic installment attachments.",
     },
 }
 

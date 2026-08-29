@@ -109,7 +109,13 @@ Pass the exact `tool_name`, a camelCase `input`, `pdf_paths`, and one stable `op
 
 If multiple PDFs belong to the same target document, payment, insurance policy, tax commitment/installment, loan/installment or DDT, group them in one `pdf_paths` array and create one proposal. Do not call the file-action tool once per PDF for the same target unless the server-reported file policy rejects the combined batch. This keeps one Core upload session, one malware-scan batch and one approval task for the user.
 
-For fiscal installment attachments, pass `targetType: "tax_installment"` and choose the exact `attachmentRole` when the user distinguishes the document channel: `payment_form` for the modulo/F24/payment form and `receipt` for the quietanza/receipt. Omit `attachmentRole` or use `general` only for a generic installment attachment. Never pass `attachmentRole` for documents, payments, tax commitments, loans, insurance policies or DDT.
+For tax installment attachments, always set `targetType: "tax_installment"` and `targetId` to the installment ID. Also set `attachmentRole`:
+
+- `payment_form` for F24, bollettino, PagoPA or other payment forms;
+- `receipt` for quietance, receipt or proof of payment;
+- `general` only for legacy generic installment files.
+
+Do not attach a payment form or receipt to a tax installment without `attachmentRole`, because REmanager would treat it as a generic installment attachment and it may not appear in the dedicated Administration panels. If files were already placed in the generic channel, prepare a new `accounting.attachments.add` proposal for the same installment with the correct role.
 
 ## Non-electronic invoice with PDFs
 
