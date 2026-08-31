@@ -129,6 +129,12 @@ DRAFT_CONTRACTS = {
         "movements: 1..200 structured bank movements; provider is fixed server-side; no raw provider payload, credentials, OCR or AI reconciliation",
     ),
     "accounting.payment_links.create": _contract("draft_with_confirmation", ("companyId", "paymentId", "entryId", "allocatedAmount")),
+    "accounting.payment_links.create_many": _contract(
+        "draft_with_confirmation",
+        ("companyId", "paymentId", "allocations"),
+        (),
+        "allocations: 1..20 objects with entryId and allocatedAmount; use one atomic proposal when splitting one payment across multiple documents",
+    ),
     "accounting.payment_links.remove": _contract("draft_with_confirmation", ("companyId", "paymentId", "entryId")),
     "accounting.tax_commitments.create": _contract("draft_with_confirmation", ("companyId", "title", "commitmentType", "totalAmount", "installmentCount"), ("taxCode", "compensable", "status", "notes", "dueDates"), "commitmentType: f24|f23|pagopa|bollettino|avviso_bonario|cartella|other; dueDates creates the bounded installment schedule atomically"),
     "accounting.tax_commitments.update": _contract("draft_with_confirmation", ("companyId", "taxCommitmentId"), ("title", "taxCode", "commitmentType", "totalAmount", "installmentCount", "compensable", "status", "notes")),

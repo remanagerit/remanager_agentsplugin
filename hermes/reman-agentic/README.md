@@ -2,7 +2,7 @@
 
 This Hermes directory plugin exposes the approved REmanager Accounting Agentic surface for one user-delegated external agent: bounded reads and business actions that always require confirmation by that user in REmanager.
 
-The connector upper bound is 90 tools: 37 reads, 50 generic `draft_with_confirmation` actions and three file actions. It exposes zero `direct` tools and cannot approve an action. Discovery, current user permissions, grants, capabilities, company resources, rate limits and audit remain authoritative on the REmanager server.
+The connector upper bound is 91 tools: 37 reads, 51 generic `draft_with_confirmation` actions and three file actions. It exposes zero `direct` tools and cannot approve an action. Discovery, current user permissions, grants, capabilities, company resources, rate limits and audit remain authoritative on the REmanager server.
 
 Configuration, provider/API keys, users/permissions, hard delete, mass export, email, AI/OCR/reconciliation, browser automation and MCP are excluded. Structured bank-movement import is included without provider credentials or raw provider payloads.
 
@@ -64,7 +64,7 @@ The plugin registers:
 - three narrow read convenience wrappers;
 - `reman_accounting_create_non_electronic_invoice` for allowlisted PDFs, Core upload sessions and mandatory confirmation.
 
-The static 90-tool catalog is only an upper bound and never grants access. A tool must also be returned by REmanager discovery with the expected mode. Inputs cannot contain user, team, agent, scope, grant or execution-mode context at any nesting level.
+The static 91-tool catalog is only an upper bound and never grants access. A tool must also be returned by REmanager discovery with the expected mode. Inputs cannot contain user, team, agent, scope, grant or execution-mode context at any nesting level.
 
 Document creation supports up to 12 structured due dates and up to 20 allocations to existing payments. REmanager derives the residual and paid/partial/open status from payment links; the plugin deliberately exposes no manually editable residual field. Generic file actions support `other_expense` and other document types, and can attach clean PDFs to existing Accounting resources.
 
@@ -84,10 +84,12 @@ Each URL is an opaque bearer capability. It may be opened repeatedly until `view
 
 Mutations require a stable `operation_id`; the connector derives the idempotency key. Reusing it checks the current state of the same action without uploading the PDF again. A replacement requested after a failed, rejected, cancelled or expired action must use a new unique `operation_id`. The model cannot provide raw headers or select `direct`. File access is fail-closed when PDF roots are absent and rejects traversal, symlinks, non-regular files and evident TOCTOU changes. Uploaded files are not consumed until the Core scanner reports the entire session `ready`. If upload or scan setup fails before REmanager has accepted the pending action, Hermes releases the abandoned upload session when the server allows it and then clears local upload-session state. Transport failures during action invocation are different: Hermes preserves the upload session and idempotency key because the server may already have created the pending action.
 
+When one payment must be allocated to multiple documents, prepare one atomic `accounting.payment_links.create_many` proposal with up to 20 `{entryId, allocatedAmount}` rows. Do not prepare multiple independent `accounting.payment_links.create` drafts for the same payment, because approving one changes the payment snapshot and correctly makes the others stale. If more than 20 allocations are needed, do not create blind batches: reload payment/document residuals and prepare separate bounded batches only with current state and clear user confirmation for the split.
+
 For file actions, pass all PDFs for the same target in one call when the server file policy allows it. For example, multiple quietance PDFs for one insurance policy or payment should be one `accounting.attachments.add` proposal with multiple `pdf_paths`, not separate upload sessions per file.
 
 When adding files to a tax installment, pass `targetType: "tax_installment"`, the installment ID as `targetId`, and an `attachmentRole`: `payment_form` for the F24/bollettino/PagoPA/model, `receipt` for the quietance or payment receipt, and `general` only for legacy generic files. Do not omit `attachmentRole` for tax payment forms or receipts.
 
-Transport failures are retryable. Server `agentic_rate_limit_exceeded` responses are retryable only after the returned `retryAfter` delay. Policy, authorization, validation, quarantine, stale-state and quota failures are non-retryable. Hermes preserves bounded REmanager diagnostic fields for upload/rate/pending-action limits: `category`, `reason`, `scope`, `operation`, `userAction`, `message` and `retryAfter`. Arbitrary remote error text is never returned to the model.
+Transport failures are retryable. Server `agentic_rate_limit_exceeded` responses are retryable only after the returned `retryAfter` delay. Policy, authorization, validation, quarantine, stale-state and quota failures are non-retryable. Hermes preserves bounded REmanager diagnostic fields for upload/rate/pending-action limits: `category`, `reason`, `scope`, `operation`, `userAction`, `message` and `retryAfter`. If REmanager returns `accounting_agentic_stale_state`, the proposal was based on an older Accounting snapshot. For payment allocations, reload the payment and its current links, then prepare a new single `accounting.payment_links.create_many` proposal for the remaining split instead of replaying stale drafts. Arbitrary remote error text is never returned to the model.
 
 The bundled skill is available as `reman-agentic:reman-accounting`.

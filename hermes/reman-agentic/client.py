@@ -95,6 +95,7 @@ APPROVED_ACCOUNTING_DRAFT_TOOLS = frozenset({
     "accounting.partners.create",
     "accounting.partners.update",
     "accounting.payment_links.create",
+    "accounting.payment_links.create_many",
     "accounting.payment_links.remove",
     "accounting.payments.create",
     "accounting.payments.duplicate",
@@ -327,7 +328,7 @@ class RemanClient:
         body = None if payload is None else json.dumps(payload, separators=(",", ":")).encode("utf-8")
         headers = {
             "Accept": "application/json",
-            "User-Agent": "Hermes-REman-Agentic/1.2.8",
+            "User-Agent": "Hermes-REman-Agentic/1.2.9",
             "X-REman-Agent-Token": self.token,
         }
         if body is not None:
