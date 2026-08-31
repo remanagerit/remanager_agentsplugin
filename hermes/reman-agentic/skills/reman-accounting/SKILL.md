@@ -32,10 +32,10 @@ Use only the typed `reman_*` tools supplied by this plugin. Never use browser au
 
 ## Available workflows
 
-The approved connector catalog contains 90 Accounting tools:
+The approved connector catalog contains 91 Accounting tools:
 
 - 37 bounded read tools;
-- 50 generic actions using `draft_with_confirmation`;
+- 51 generic actions using `draft_with_confirmation`;
 - three file actions for non-electronic invoices, generic documents and attachments on existing resources;
 - zero `direct` tools.
 
@@ -55,6 +55,8 @@ After discovery, call `reman_accounting_tool_contract` with the exact tool name 
 Field names are case-sensitive. Generic read and action inputs use `camelCase`. The dedicated file tool uses its typed `snake_case` schema.
 
 For a newly created document, use `dueDates` to propose 1..12 payment deadlines in the same action. Use `paymentAllocations` to link 1..20 existing payments. Never invent or pass a manual residual: REmanager derives paid/partial/open status and residual from approved payment links.
+
+Use `accounting.payment_links.create_many` for a payment split across multiple existing documents. It normally allows up to 20 allocations in one proposal for the same payment. Do not prepare multiple independent `accounting.payment_links.create` drafts for the same payment: once the user approves one draft, the payment state changes and the remaining drafts correctly become stale.
 
 ## Reads
 
@@ -164,6 +166,7 @@ The two URLs are separate capabilities. Do not open both automatically. Open or 
 
 - Policy, authentication, validation, quarantine, stale-state, and authorization errors are non-retryable.
 - Transport failures are retryable. A server `agentic_rate_limit_exceeded` response is retryable only after the returned `retryAfter` delay; do not retry faster than REmanager asks.
+- If REmanager returns `accounting_agentic_stale_state`, do not replay the same draft. Reload the relevant payment/document state, then prepare a fresh proposal. For a payment split, use `accounting.payment_links.create_many` for the remaining intended allocations.
 - Quota errors are not document validation errors. Keep the exact bounded code in the final answer:
   - `agentic_upload_session_quota_exceeded`: too many active unheld upload sessions for this agent/user/team; release abandoned pre-action sessions where possible and retry later.
   - `agentic_upload_file_quota_exceeded`: temporary upload file-count quota is full.

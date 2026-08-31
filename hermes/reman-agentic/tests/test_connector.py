@@ -347,13 +347,16 @@ class ConnectorTest(unittest.TestCase):
             FILES.read_allowed_pdf(path, FILES.allowed_pdf_roots(), max_bytes=1024 * 1024, before_open=before_open)
         self.assertEqual(raised.exception.code, code)
 
-    def test_catalog_has_exact_90_tool_membership(self):
+    def test_catalog_has_exact_91_tool_membership(self):
         self.assertEqual(len(CLIENT.APPROVED_ACCOUNTING_READ_TOOLS), 37)
-        self.assertEqual(len(CLIENT.APPROVED_ACCOUNTING_DRAFT_TOOLS), 53)
+        self.assertEqual(len(CLIENT.APPROVED_ACCOUNTING_DRAFT_TOOLS), 54)
         self.assertEqual(set(CATALOG.TOOL_CONTRACTS), CLIENT.APPROVED_ACCOUNTING_TOOLS)
-        self.assertEqual(len(CATALOG.TOOL_CONTRACTS), 90)
+        self.assertEqual(len(CATALOG.TOOL_CONTRACTS), 91)
         self.assertIn("accounting.bank_movements.import", CATALOG.TOOL_CONTRACTS)
         self.assertIn("accounting.documents.create_access_urls", CATALOG.TOOL_CONTRACTS)
+        split_contract = CATALOG.contract_for("accounting.payment_links.create_many")
+        self.assertEqual(split_contract["required"], ["companyId", "paymentId", "allocations"])
+        self.assertIn("1..20", split_contract["notes"])
 
     def test_operator_instructions_are_self_contained(self):
         readme = (PLUGIN_DIR / "README.md").read_text(encoding="utf-8")
@@ -380,12 +383,16 @@ class ConnectorTest(unittest.TestCase):
         self.assertIn("must not invent its own conversion", readme)
         self.assertIn("--upgrade", readme)
         self.assertIn("restart the Hermes process", readme)
-        self.assertIn("version: 1.2.8", plugin_manifest)
-        self.assertIn('Hermes-REman-Agentic/1.2.8', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
+        self.assertIn("version: 1.2.9", plugin_manifest)
+        self.assertIn('Hermes-REman-Agentic/1.2.9', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
         self.assertIn("attachmentRole", readme)
         self.assertIn("attachmentRole", skill)
         self.assertIn("payment_form", skill)
         self.assertIn("receipt", skill)
+        self.assertIn("payment_links.create_many", readme)
+        self.assertIn("payment_links.create_many", skill)
+        self.assertIn("accounting_agentic_stale_state", readme)
+        self.assertIn("accounting_agentic_stale_state", skill)
 
     def test_tax_installment_attachment_role_contracts(self):
         add_contract = CATALOG.contract_for("accounting.attachments.add")
