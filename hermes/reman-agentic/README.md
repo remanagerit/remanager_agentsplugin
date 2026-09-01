@@ -2,7 +2,7 @@
 
 This Hermes directory plugin exposes the approved REmanager Accounting Agentic surface for one user-delegated external agent: bounded reads and business actions that always require confirmation by that user in REmanager.
 
-The connector upper bound is 91 tools: 37 reads, 51 generic `draft_with_confirmation` actions and three file actions. It exposes zero `direct` tools and cannot approve an action. Discovery, current user permissions, grants, capabilities, company resources, rate limits and audit remain authoritative on the REmanager server.
+The connector upper bound is 92 tools: 37 reads, 52 generic `draft_with_confirmation` actions and three file actions. It exposes zero `direct` tools and cannot approve an action. Discovery, current user permissions, grants, capabilities, company resources, rate limits and audit remain authoritative on the REmanager server.
 
 Configuration, provider/API keys, users/permissions, hard delete, mass export, email, AI/OCR/reconciliation, browser automation and MCP are excluded. Structured bank-movement import is included without provider credentials or raw provider payloads.
 
@@ -60,13 +60,16 @@ The plugin registers:
 - `reman_accounting_tool_contract` for the versioned input contract of one discovered tool;
 - `reman_accounting_read` for exact Accounting reads;
 - `reman_accounting_prepare_action` for non-file actions fixed to `draft_with_confirmation`;
+- `reman_accounting_action` as a compatibility alias for the same user-confirmed preparation flow;
 - `reman_accounting_prepare_file_action` for generic document PDFs and attachments on existing resources;
 - three narrow read convenience wrappers;
 - `reman_accounting_create_non_electronic_invoice` for allowlisted PDFs, Core upload sessions and mandatory confirmation.
 
-The static 91-tool catalog is only an upper bound and never grants access. A tool must also be returned by REmanager discovery with the expected mode. Inputs cannot contain user, team, agent, scope, grant or execution-mode context at any nesting level.
+The static 92-tool catalog is only an upper bound and never grants access. A tool must also be returned by REmanager discovery with the expected mode. Inputs cannot contain user, team, agent, scope, grant or execution-mode context at any nesting level.
 
 Document creation supports up to 12 structured due dates and up to 20 allocations to existing payments. REmanager derives the residual and paid/partial/open status from payment links; the plugin deliberately exposes no manually editable residual field. Generic file actions support `other_expense` and other document types, and can attach clean PDFs to existing Accounting resources.
+
+`accounting.documents.set_projects_availability` is available only as a user-confirmed action. Use it when the user asks to make one Accounting document available or unavailable to Projects/Impresa workflows. It does not assign a project, change amounts, create payments, change document status or alter attachments.
 
 Payments can carry an explicit `insurancePolicyId`. Hermes must resolve the policy through the granted insurance-policy read tools and include the ID in `accounting.payments.create` or `accounting.payments.update` when the payment concerns that policy. REmanager enforces the same company and the delegating user's current policy permissions. The relationship must not be represented only in notes; `insurancePolicyId: null` removes it only through a user-confirmed update.
 

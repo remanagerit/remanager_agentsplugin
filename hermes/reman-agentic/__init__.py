@@ -26,6 +26,7 @@ def register(ctx):
         (schemas.ACCOUNTING_TOOL_CONTRACT, tools.tool_contract, _configured, ["REMAN_AGENT_TOKEN"]),
         (schemas.INVOKE_ACCOUNTING_READ, tools.invoke_accounting_read, _configured, ["REMAN_AGENT_TOKEN"]),
         (schemas.PREPARE_ACCOUNTING_ACTION, tools.prepare_accounting_action, _configured, ["REMAN_AGENT_TOKEN"]),
+        (schemas.ACCOUNTING_ACTION, tools.accounting_action, _configured, ["REMAN_AGENT_TOKEN"]),
         (
             schemas.PREPARE_ACCOUNTING_FILE_ACTION,
             tools.prepare_accounting_file_action,
