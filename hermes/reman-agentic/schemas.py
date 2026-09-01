@@ -86,6 +86,15 @@ PREPARE_ACCOUNTING_ACTION = {
     },
 }
 
+ACCOUNTING_ACTION = {
+    **PREPARE_ACCOUNTING_ACTION,
+    "name": "reman_accounting_action",
+    "description": (
+        "Compatibility alias for reman_accounting_prepare_action. It prepares one granted Accounting action "
+        "for mandatory confirmation and never approves or executes direct actions."
+    ),
+}
+
 PREPARE_ACCOUNTING_FILE_ACTION = {
     "name": "reman_accounting_prepare_file_action",
     "description": (

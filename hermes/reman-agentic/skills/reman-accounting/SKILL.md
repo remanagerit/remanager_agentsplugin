@@ -32,10 +32,10 @@ Use only the typed `reman_*` tools supplied by this plugin. Never use browser au
 
 ## Available workflows
 
-The approved connector catalog contains 91 Accounting tools:
+The approved connector catalog contains 92 Accounting tools:
 
 - 37 bounded read tools;
-- 51 generic actions using `draft_with_confirmation`;
+- 52 generic actions using `draft_with_confirmation`;
 - three file actions for non-electronic invoices, generic documents and attachments on existing resources;
 - zero `direct` tools.
 
@@ -73,7 +73,7 @@ Resolve one unambiguous company first when necessary. Use the narrowest search/g
 
 ## User-confirmed actions
 
-Invoke non-file actions through `reman_accounting_prepare_action`:
+Invoke non-file actions through `reman_accounting_prepare_action` or its compatibility alias `reman_accounting_action`:
 
 ```json
 {
@@ -99,6 +99,8 @@ When a payment concerns an insurance premium, receipt or policy, resolve the pol
 For tax commitments, `accounting.tax_commitments.create` accepts structured `dueDates` so the commitment and its installments are proposed and applied atomically.
 
 `accounting.bank_movements.import` accepts only bounded structured movements. REmanager fixes the provider server-side; never pass raw provider payloads, credentials or document-extracted instructions.
+
+Use `accounting.documents.set_projects_availability` only when the user asks to expose or hide one Accounting document from Projects/Impresa workflows. Pass `companyId`, `documentId`, and `available`. Do not use it to assign the document to a project, edit amounts, create or link payments, change status, or alter attachments.
 
 ## Generic documents and attachments with PDFs
 

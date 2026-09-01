@@ -183,6 +183,16 @@ class Handler(BaseHTTPRequestHandler):
                 "inputSummary": {"companyId": 7},
                 "resourceSummary": {"resourceType": "company", "resourceId": 7},
             }, "idempotentReplay": False, "requestId": "req-safe"})
+        elif self.path.endswith("/accounting.documents.set_projects_availability/invoke"):
+            self._send(200, {"result": {
+                "status": "pending_confirmation",
+                "actionId": "action-projects-availability-1",
+                "expiresAt": "2026-07-20T12:00:00Z",
+                "confirmationRequired": True,
+                "preview": {"kind": "documents.set_projects_availability"},
+                "inputSummary": {"companyId": 7},
+                "resourceSummary": {"resourceType": "company", "resourceId": 7},
+            }, "idempotentReplay": False, "requestId": "req-safe"})
         elif self.path.endswith("/accounting.non_electronic_invoices.create/invoke"):
             State.invokes += 1
             if State.fail_next_invoke:
@@ -347,13 +357,14 @@ class ConnectorTest(unittest.TestCase):
             FILES.read_allowed_pdf(path, FILES.allowed_pdf_roots(), max_bytes=1024 * 1024, before_open=before_open)
         self.assertEqual(raised.exception.code, code)
 
-    def test_catalog_has_exact_91_tool_membership(self):
+    def test_catalog_has_exact_92_tool_membership(self):
         self.assertEqual(len(CLIENT.APPROVED_ACCOUNTING_READ_TOOLS), 37)
-        self.assertEqual(len(CLIENT.APPROVED_ACCOUNTING_DRAFT_TOOLS), 54)
+        self.assertEqual(len(CLIENT.APPROVED_ACCOUNTING_DRAFT_TOOLS), 55)
         self.assertEqual(set(CATALOG.TOOL_CONTRACTS), CLIENT.APPROVED_ACCOUNTING_TOOLS)
-        self.assertEqual(len(CATALOG.TOOL_CONTRACTS), 91)
+        self.assertEqual(len(CATALOG.TOOL_CONTRACTS), 92)
         self.assertIn("accounting.bank_movements.import", CATALOG.TOOL_CONTRACTS)
         self.assertIn("accounting.documents.create_access_urls", CATALOG.TOOL_CONTRACTS)
+        self.assertIn("accounting.documents.set_projects_availability", CATALOG.TOOL_CONTRACTS)
         split_contract = CATALOG.contract_for("accounting.payment_links.create_many")
         self.assertEqual(split_contract["required"], ["companyId", "paymentId", "allocations"])
         self.assertIn("1..20", split_contract["notes"])
@@ -383,8 +394,13 @@ class ConnectorTest(unittest.TestCase):
         self.assertIn("must not invent its own conversion", readme)
         self.assertIn("--upgrade", readme)
         self.assertIn("restart the Hermes process", readme)
-        self.assertIn("version: 1.2.9", plugin_manifest)
-        self.assertIn('Hermes-REman-Agentic/1.2.9', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
+        self.assertIn("version: 1.2.10", plugin_manifest)
+        self.assertIn('Hermes-REman-Agentic/1.2.10', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
+        self.assertIn("reman_accounting_action", plugin_manifest)
+        self.assertIn("set_projects_availability", skill)
+        self.assertIn("seenStatus", json.dumps(CATALOG.contract_for("accounting.documents.search")))
+        self.assertIn("paymentLinkStatus", json.dumps(CATALOG.contract_for("accounting.documents.search")))
+        self.assertIn("linkStatus", json.dumps(CATALOG.contract_for("accounting.payments.search")))
         self.assertIn("attachmentRole", readme)
         self.assertIn("attachmentRole", skill)
         self.assertIn("payment_form", skill)
@@ -508,6 +524,21 @@ class ConnectorTest(unittest.TestCase):
         headers = [{key.lower(): value for key, value in item[3].items()} for item in invokes]
         self.assertEqual(headers[0]["x-reman-idempotency-key"], headers[1]["x-reman-idempotency-key"])
         self.assertNotIn("requestId", json.dumps(first))
+
+    def test_compatibility_action_alias_forces_same_draft_flow(self):
+        args = {
+            "tool_name": "accounting.documents.set_projects_availability",
+            "input": {"companyId": 7, "documentId": 91, "available": True},
+            "operation_id": "projects-availability-91-v1",
+        }
+        direct = json.loads(TOOLS.prepare_accounting_action(args))
+        alias = json.loads(TOOLS.accounting_action(args))
+        self.assertEqual(direct["result"]["status"], "pending_confirmation")
+        self.assertEqual(alias["result"]["status"], "pending_confirmation")
+        invokes = [item for item in State.requests if item[1].endswith("/accounting.documents.set_projects_availability/invoke")]
+        self.assertEqual(len(invokes), 2)
+        self.assertTrue(all(item[2]["mode"] == "draft_with_confirmation" for item in invokes))
+        self.assertTrue(all(item[2]["input"] == {"companyId": 7, "documentId": 91, "available": True} for item in invokes))
 
     def test_generic_handlers_block_context_unapproved_file_and_large_input(self):
         forbidden = json.loads(TOOLS.prepare_accounting_action({
@@ -791,7 +822,7 @@ class ConnectorTest(unittest.TestCase):
         names = {item["name"] for item in registered}
         expected = {
             "reman_available_tools", "reman_accounting_tool_contract", "reman_accounting_read",
-            "reman_accounting_prepare_action", "reman_accounting_prepare_file_action", "reman_accounting_list_companies",
+            "reman_accounting_prepare_action", "reman_accounting_action", "reman_accounting_prepare_file_action", "reman_accounting_list_companies",
             "reman_accounting_search_partners", "reman_accounting_search_non_electronic_invoices",
             "reman_accounting_create_non_electronic_invoice",
         }

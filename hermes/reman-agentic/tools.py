@@ -148,6 +148,10 @@ def prepare_accounting_action(args, **kwargs):
     return _ok(lambda: _prepare_accounting_action(args))
 
 
+def accounting_action(args, **kwargs):
+    return prepare_accounting_action(args, **kwargs)
+
+
 def list_companies(args, **kwargs):
     return _ok(lambda: RemanClient().invoke("accounting.companies.list", "read", _compact({
         "query": args.get("query"), "limit": args.get("limit", 25)
