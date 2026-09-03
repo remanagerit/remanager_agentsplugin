@@ -36,6 +36,7 @@ class State:
     uploads = 0
     invokes = 0
     releases = 0
+    cancels = 0
     quota_on_create = False
     fail_next_upload = None
     fail_next_invoke = None
@@ -106,7 +107,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         payload = self._json()
         State.requests.append(("POST", self.path, payload, dict(self.headers)))
-        if self.path == "/api/v1/agentic/uploads/sessions":
+        if self.path.startswith("/api/v1/agentic/actions/") and self.path.endswith("/cancel"):
+            State.cancels += 1
+            action_id = self.path.split("/")[5]
+            self._send(200, {"item": {"actionId": action_id, "status": "cancelled", "cancelledAt": "2026-09-03T10:00:00Z"}})
+        elif self.path == "/api/v1/agentic/uploads/sessions":
             if State.quota_on_create:
                 self._send(429, {
                     "error": "agentic_upload_session_quota_exceeded",
@@ -293,6 +298,7 @@ class ConnectorTest(unittest.TestCase):
         State.uploads = 0
         State.invokes = 0
         State.releases = 0
+        State.cancels = 0
         State.quota_on_create = False
         State.fail_next_upload = None
         State.fail_next_invoke = None
@@ -394,9 +400,12 @@ class ConnectorTest(unittest.TestCase):
         self.assertIn("must not invent its own conversion", readme)
         self.assertIn("--upgrade", readme)
         self.assertIn("restart the Hermes process", readme)
-        self.assertIn("version: 1.2.10", plugin_manifest)
-        self.assertIn('Hermes-REman-Agentic/1.2.10', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
+        self.assertIn("version: 1.2.11", plugin_manifest)
+        self.assertIn('Hermes-REman-Agentic/1.2.11', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
         self.assertIn("reman_accounting_action", plugin_manifest)
+        self.assertIn("reman_agentic_action_cancel", plugin_manifest)
+        self.assertIn("reman_agentic_action_cancel", readme)
+        self.assertIn("reman_agentic_action_cancel", skill)
         self.assertIn("set_projects_availability", skill)
         self.assertIn("seenStatus", json.dumps(CATALOG.contract_for("accounting.documents.search")))
         self.assertIn("paymentLinkStatus", json.dumps(CATALOG.contract_for("accounting.documents.search")))
@@ -539,6 +548,24 @@ class ConnectorTest(unittest.TestCase):
         self.assertEqual(len(invokes), 2)
         self.assertTrue(all(item[2]["mode"] == "draft_with_confirmation" for item in invokes))
         self.assertTrue(all(item[2]["input"] == {"companyId": 7, "documentId": 91, "available": True} for item in invokes))
+
+    def test_cancel_agentic_action_calls_core_with_agent_token(self):
+        result = json.loads(TOOLS.cancel_agentic_action({
+            "action_id": "581a02d2-ad05-491b-9133-fd0574ab5c9f",
+            "reason": "Duplicate pending proposal",
+        }))
+        self.assertEqual(result["item"]["status"], "cancelled")
+        self.assertEqual(State.cancels, 1)
+        cancel = next(item for item in State.requests if item[1].endswith("/cancel"))
+        self.assertEqual(cancel[1], "/api/v1/agentic/actions/581a02d2-ad05-491b-9133-fd0574ab5c9f/cancel")
+        self.assertEqual(cancel[2], {"reason": "Duplicate pending proposal"})
+        headers = {key.lower(): value for key, value in cancel[3].items()}
+        self.assertEqual(headers["x-reman-agent-token"], "secret-agent-token")
+
+    def test_cancel_agentic_action_rejects_invalid_action_id(self):
+        result = json.loads(TOOLS.cancel_agentic_action({"action_id": "../not-safe"}))
+        self.assertEqual(result["error"], "reman_action_id_invalid")
+        self.assertEqual(State.cancels, 0)
 
     def test_generic_handlers_block_context_unapproved_file_and_large_input(self):
         forbidden = json.loads(TOOLS.prepare_accounting_action({
@@ -822,7 +849,8 @@ class ConnectorTest(unittest.TestCase):
         names = {item["name"] for item in registered}
         expected = {
             "reman_available_tools", "reman_accounting_tool_contract", "reman_accounting_read",
-            "reman_accounting_prepare_action", "reman_accounting_action", "reman_accounting_prepare_file_action", "reman_accounting_list_companies",
+            "reman_accounting_prepare_action", "reman_accounting_action", "reman_agentic_action_cancel",
+            "reman_accounting_prepare_file_action", "reman_accounting_list_companies",
             "reman_accounting_search_partners", "reman_accounting_search_non_electronic_invoices",
             "reman_accounting_create_non_electronic_invoice",
         }

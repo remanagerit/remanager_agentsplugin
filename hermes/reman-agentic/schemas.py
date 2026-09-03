@@ -95,6 +95,33 @@ ACCOUNTING_ACTION = {
     ),
 }
 
+CANCEL_AGENTIC_ACTION = {
+    "name": "reman_agentic_action_cancel",
+    "description": (
+        "Cancel one pending REmanager Agentic action previously prepared by this same connected agent. "
+        "Only pending_confirmation actions owned by the same agent token, team and delegating user can be cancelled; "
+        "approve, reject and apply remain user-only operations in REmanager."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "action_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160,
+                "description": "Public actionId returned by a previous pending proposal.",
+            },
+            "reason": {
+                "type": "string",
+                "maxLength": 500,
+                "description": "Optional bounded reason for audit, without customer secrets or file paths.",
+            },
+        },
+        "required": ["action_id"],
+        "additionalProperties": False,
+    },
+}
+
 PREPARE_ACCOUNTING_FILE_ACTION = {
     "name": "reman_accounting_prepare_file_action",
     "description": (

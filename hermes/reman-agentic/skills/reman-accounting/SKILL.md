@@ -26,7 +26,7 @@ Use only the typed `reman_*` tools supplied by this plugin. Never use browser au
 - Call `reman_available_tools` before each workflow. Its current result is the authority; this skill and the local catalog are documentation, not a grant.
 - Invoke only an exact Accounting tool returned by discovery with the required mode.
 - Never include `teamId`, `userId`, `agentId`, `delegatingUserId`, `mode`, `executionMode`, scopes, grants, or other execution context in business input.
-- Never use `direct`. Never approve, reject, or cancel an action on behalf of the user.
+- Never use `direct`. Never approve or reject an action on behalf of the user. You may cancel only your own still-pending proposal when it is duplicate, obsolete or wrong.
 - Never widen a company or resource after an error. Ask the user to adjust grants in REmanager when authorization is insufficient.
 - Do not perform bulk scraping or emulate an export by exhausting pages.
 
@@ -176,6 +176,7 @@ The two URLs are separate capabilities. Do not open both automatically. Open or 
   - `agentic_upload_session_limit_exceeded`: a single upload session exceeds its file-count or byte-size policy; split only if the server policy requires it.
   - `agentic_pending_action_limit_exceeded`: the user has too many pending Agentic proposals; ask the user to approve, reject, cancel or hide completed items in REmanager, subject to the system-admin configured limit.
 - A replay can report the current action as `failed`, `rejected`, `cancelled`, `expired`, or `applied`. Never describe a terminal action as pending. If the user explicitly asks to prepare a replacement for a failed, rejected, cancelled, or expired action, use a new unique `operation_id`; do not reuse the terminal action's identifier.
+- If you created a pending proposal that is duplicate, obsolete or wrong, call `reman_agentic_action_cancel` with its `action_id` and a short reason. Do not use it for another agent's proposal, non-pending action, authorization failure, approval or rejection.
 - A terminal replay may include a bounded public `errorCode`. Use it only to explain the outcome; never expose or infer database, storage, provider, path, token, or exception details.
 - `agentic_disabled` and `agentic_direct_disabled` are terminal policy blockers; never attempt a fallback.
 - Claim read success only from a successful REmanager result.
