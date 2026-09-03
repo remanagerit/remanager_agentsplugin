@@ -23,6 +23,7 @@ from .file_access import allowed_pdf_roots, read_allowed_pdf
 
 ACCOUNTING_TOOL = re.compile(r"^accounting\.[a-z0-9_.]+$")
 OPERATION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+ACTION_ID = re.compile(r"^[A-Za-z0-9._:-]{1,160}$")
 STATE_TTL_SECONDS = 7 * 24 * 60 * 60
 STALE_UPLOAD_SESSION_ERRORS = {"agentic_upload_session_not_found", "agentic_upload_session_unavailable"}
 RESERVED_AGENT_INPUT_KEYS = {
@@ -150,6 +151,27 @@ def prepare_accounting_action(args, **kwargs):
 
 def accounting_action(args, **kwargs):
     return prepare_accounting_action(args, **kwargs)
+
+
+def _cancel_agentic_action(args):
+    action_id = args.get("action_id")
+    if not isinstance(action_id, str) or not ACTION_ID.fullmatch(action_id):
+        raise RemanError("reman_action_id_invalid")
+    reason = args.get("reason")
+    if reason is not None:
+        if not isinstance(reason, str) or len(reason.strip()) > 500:
+            raise RemanError("reman_cancel_reason_invalid")
+        reason = reason.strip()
+    response = RemanClient().cancel_action(action_id, reason)
+    item = response.get("item") if isinstance(response, dict) and isinstance(response.get("item"), dict) else {}
+    return _compact({
+        "item": {key: item.get(key) for key in ("actionId", "status", "createdAt", "cancelledAt", "updatedAt") if key in item},
+        "requestId": response.get("requestId") if isinstance(response, dict) else None,
+    })
+
+
+def cancel_agentic_action(args, **kwargs):
+    return _ok(lambda: _cancel_agentic_action(args))
 
 
 def list_companies(args, **kwargs):
