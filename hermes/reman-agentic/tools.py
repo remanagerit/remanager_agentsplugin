@@ -19,6 +19,7 @@ from .client import (
     RemanTransportError,
 )
 from .file_access import allowed_pdf_roots, read_allowed_pdf
+from .schemas import UPLOAD_FILE
 
 
 ACCOUNTING_TOOL = re.compile(r"^accounting\.[a-z0-9_.]+$")
@@ -132,9 +133,18 @@ def invoke_accounting_read(args, **kwargs):
 
 def _prepare_accounting_action(args):
     tool_name = args.get("tool_name")
-    if tool_name in FILE_ACTION_TOOLS:
+    if tool_name in FILE_ACTION_TOOLS and tool_name != "accounting.attachments.add":
         raise RemanError("reman_file_tool_requires_dedicated_handler")
-    input_data = _validate_business_input(tool_name, args.get("input"), APPROVED_ACCOUNTING_DRAFT_TOOLS)
+    supplied = args.get("input")
+    if tool_name == "accounting.attachments.add" and isinstance(supplied, dict):
+        session_id = supplied.get("uploadSessionId")
+        if not isinstance(session_id, str) or not ACTION_ID.fullmatch(session_id):
+            raise RemanError("reman_upload_input_invalid")
+        # Only this top-level business reference is permitted; recursive context checks stay intact.
+        business = {key: value for key, value in supplied.items() if key != "uploadSessionId"}
+        input_data = {**_validate_business_input(tool_name, business, APPROVED_ACCOUNTING_DRAFT_TOOLS), "uploadSessionId": session_id}
+    else:
+        input_data = _validate_business_input(tool_name, supplied, APPROVED_ACCOUNTING_DRAFT_TOOLS)
     operation_id = _operation_id(args.get("operation_id"))
     response = RemanClient().invoke(
         tool_name,
@@ -151,6 +161,35 @@ def prepare_accounting_action(args, **kwargs):
 
 def accounting_action(args, **kwargs):
     return prepare_accounting_action(args, **kwargs)
+
+
+def upload_session_create(args, **kwargs):
+    return _ok(lambda: RemanClient().create_upload_session("accounting.attachments.add"))
+
+
+def upload_file_base64(args, **kwargs):
+    def run():
+        for name, definition in UPLOAD_FILE["parameters"]["properties"].items():
+            value = args.get(name)
+            if not isinstance(value, str) or not value or len(value) > definition.get("maxLength", 255):
+                raise RemanError("reman_upload_input_invalid")
+            if "enum" in definition and value not in definition["enum"]:
+                raise RemanError("reman_upload_input_invalid")
+        if not ACTION_ID.fullmatch(args["sessionId"]):
+            raise RemanError("reman_upload_input_invalid")
+        client = RemanClient()
+        client.require_tool("accounting.attachments.add", "draft_with_confirmation")
+        return client.upload_file_base64(args["sessionId"], args["fileName"], args["mimeType"], args["contentBase64"])
+    return _ok(run)
+
+
+def upload_session_release(args, **kwargs):
+    def run():
+        session_id = args.get("sessionId")
+        if not isinstance(session_id, str) or not ACTION_ID.fullmatch(session_id):
+            raise RemanError("reman_upload_input_invalid")
+        return RemanClient().release_upload_session(session_id)
+    return _ok(run)
 
 
 def _cancel_agentic_action(args):

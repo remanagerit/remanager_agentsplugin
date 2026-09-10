@@ -22,6 +22,9 @@ def register(ctx):
         description="Governed REmanager Accounting read and user-confirmed action workflows.",
     )
     definitions = (
+        (schemas.UPLOAD_SESSION_CREATE, tools.upload_session_create, _configured, ["REMAN_AGENT_TOKEN"]),
+        (schemas.UPLOAD_FILE, tools.upload_file_base64, _configured, ["REMAN_AGENT_TOKEN"]),
+        (schemas.UPLOAD_SESSION_RELEASE, tools.upload_session_release, _configured, ["REMAN_AGENT_TOKEN"]),
         (schemas.AVAILABLE_TOOLS, tools.available_tools, _configured, ["REMAN_AGENT_TOKEN"]),
         (schemas.ACCOUNTING_TOOL_CONTRACT, tools.tool_contract, _configured, ["REMAN_AGENT_TOKEN"]),
         (schemas.INVOKE_ACCOUNTING_READ, tools.invoke_accounting_read, _configured, ["REMAN_AGENT_TOKEN"]),

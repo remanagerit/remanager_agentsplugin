@@ -329,7 +329,7 @@ class RemanClient:
         body = None if payload is None else json.dumps(payload, separators=(",", ":")).encode("utf-8")
         headers = {
             "Accept": "application/json",
-            "User-Agent": "Hermes-REman-Agentic/1.2.11",
+            "User-Agent": "Hermes-REman-Agentic/1.2.12",
             "X-REman-Agent-Token": self.token,
         }
         if body is not None:
@@ -442,13 +442,16 @@ class RemanClient:
         )
 
     def upload_pdf(self, session_id, file_name, content):
+        return self.upload_file_base64(session_id, file_name, "application/pdf", base64.b64encode(content).decode("ascii"))
+
+    def upload_file_base64(self, session_id, file_name, mime_type, content_base64):
         return self._request(
             "POST",
             "/api/v1/agentic/uploads/sessions/{}/items".format(urllib.parse.quote(session_id, safe="")),
             {
                 "fileName": file_name,
-                "mimeType": "application/pdf",
-                "contentBase64": base64.b64encode(content).decode("ascii"),
+                "mimeType": mime_type,
+                "contentBase64": content_base64,
             },
         )
 

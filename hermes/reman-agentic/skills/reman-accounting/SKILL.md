@@ -181,3 +181,15 @@ The two URLs are separate capabilities. Do not open both automatically. Open or 
 - `agentic_disabled` and `agentic_direct_disabled` are terminal policy blockers; never attempt a fallback.
 - Claim read success only from a successful REmanager result.
 - Claim mutation completion only after REmanager reports the action as applied following user confirmation. Preparation alone is not completion.
+
+## 1.2.12: pre-uploaded tax attachments
+
+Use reman_agentic_upload_session_create({}) to create a fresh accounting.attachments.add session. Upload original bytes with reman_agentic_upload_file_base64({sessionId,fileName,mimeType,contentBase64}). These helpers do not read local paths or expand filesystem access. The existing PDF file handlers and their allowed-root restrictions remain unchanged.
+
+Then call reman_accounting_action (or reman_accounting_prepare_action) with tool_name accounting.attachments.add, a stable operation_id, and input {companyId,targetType,targetId,uploadSessionId,attachmentRole?}. Only the top-level uploadSessionId for this tool is accepted; identity/team/grant/mode and nested context fields remain forbidden. This prepares a draft only. Reuse identical operation_id/input/session for retries; do not reupload or release after an uncertain invoke or once a proposal holds the session. Release an abandoned pre-action session with reman_agentic_upload_session_release({sessionId}).
+
+Non-PDF formats require live stored_document policy and targetType tax_commitment or tax_installment. MIME map: pdf=application/pdf; eml=message/rfc822; doc=application/msword; docx=application/vnd.openxmlformats-officedocument.wordprocessingml.document; xls=application/vnd.ms-excel; xlsx=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet; pages=application/vnd.apple.pages; numbers=application/vnd.apple.numbers; jpg/jpeg=image/jpeg; png=image/png. Never use generic ZIP/octet-stream MIME or rename files. New formats need a new session; old session allowlists do not expand. Effective limits can reduce caps of 5 files,20MiB/file,100MiB total.
+
+For tax_installment use payment_form, receipt or general; omitted role is general. For tax_commitment omit attachmentRole. Other attachment targets and invoice import/create remain PDF-only. Core/Accounting validate actual bytes, target and clean scan; uploaded is not applied.
+
+Pages/Numbers must be single modern archives containing Metadata/Properties.plist and Index/*.iwa, not directories or legacy packages. Family identification does not certify Pages versus Numbers semantics. No conversion, automatic packaging, EML extraction or macro execution; previews are not guaranteed.

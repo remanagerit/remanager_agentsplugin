@@ -63,9 +63,17 @@ expected = {
     "reman_accounting_search_partners",
     "reman_accounting_search_non_electronic_invoices",
     "reman_accounting_create_non_electronic_invoice",
+    "reman_agentic_upload_session_create",
+    "reman_agentic_upload_file_base64",
+    "reman_agentic_upload_session_release",
 }
 assert set(tools) == expected, tools
-assert not any(word in name for name in tools for word in ("upload", "delete", "direct", "mcp"))
+assert not any(word in name for name in tools for word in ("delete", "direct", "mcp"))
+assert {name for name in tools if "upload" in name} == {
+    "reman_agentic_upload_session_create",
+    "reman_agentic_upload_file_base64",
+    "reman_agentic_upload_session_release",
+}
 PY
 HERMES_HOME="$TEMP_ROOT/hermes-home" "$INSTALLED/uninstall.sh"
 test ! -e "$INSTALLED"
