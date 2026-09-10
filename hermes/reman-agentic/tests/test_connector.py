@@ -51,7 +51,7 @@ def discovered_items():
     drafts = [
         {
             "name": name,
-            "supportedModes": ["draft_with_confirmation"] if name == "accounting.documents.recalculate_self_invoice" else ["draft_with_confirmation", "direct"],
+            "supportedModes": ["draft_with_confirmation", "direct"],
             "description": "draft",
             **({"filePolicy": {"maxFiles": 5, "maxFileBytes": 20 * 1024 * 1024, "maxTotalBytes": 100 * 1024 * 1024}} if name in CLIENT.FILE_ACTION_TOOLS else {}),
         }
