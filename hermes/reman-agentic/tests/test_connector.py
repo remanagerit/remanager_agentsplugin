@@ -400,8 +400,8 @@ class ConnectorTest(unittest.TestCase):
         self.assertIn("must not invent its own conversion", readme)
         self.assertIn("--upgrade", readme)
         self.assertIn("restart the Hermes process", readme)
-        self.assertIn("version: 1.2.11", plugin_manifest)
-        self.assertIn('Hermes-REman-Agentic/1.2.11', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
+        self.assertIn("version: 1.2.12", plugin_manifest)
+        self.assertIn('Hermes-REman-Agentic/1.2.12', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
         self.assertIn("reman_accounting_action", plugin_manifest)
         self.assertIn("reman_agentic_action_cancel", plugin_manifest)
         self.assertIn("reman_agentic_action_cancel", readme)
@@ -566,6 +566,40 @@ class ConnectorTest(unittest.TestCase):
         result = json.loads(TOOLS.cancel_agentic_action({"action_id": "../not-safe"}))
         self.assertEqual(result["error"], "reman_action_id_invalid")
         self.assertEqual(State.cancels, 0)
+
+    def test_preuploaded_attachment_draft_keeps_session_and_idempotency_without_reupload(self):
+        session = json.loads(TOOLS.upload_session_create({}))["sessionId"]
+        for mime in PLUGIN.schemas.UPLOAD_FILE["parameters"]["properties"]["mimeType"]["enum"]:
+            uploaded = json.loads(TOOLS.upload_file_base64({"sessionId": session, "fileName": "synthetic.file", "mimeType": mime, "contentBase64": "c3ludGhldGlj"}))
+            self.assertNotIn("error", uploaded)
+            self.assertEqual(State.requests[-1][2]["mimeType"], mime)
+        uploads = State.uploads
+        args = {"tool_name": "accounting.attachments.add", "input": {
+            "companyId": 7, "targetType": "tax_installment", "targetId": 1,
+            "attachmentRole": "receipt", "uploadSessionId": session
+        }, "operation_id": "preuploaded-1"}
+        for _ in range(2):
+            result = json.loads(TOOLS.accounting_action(args))
+            self.assertEqual(result["result"]["status"], "pending_confirmation")
+        invokes = [r for r in State.requests if r[1].endswith('/accounting.attachments.add/invoke')]
+        self.assertEqual(len(invokes), 2)
+        for request in invokes:
+            self.assertEqual(request[2]["mode"], "draft_with_confirmation")
+            self.assertEqual(request[2]["input"], args["input"])
+        keys = [{k.lower(): v for k, v in r[3].items()}["x-reman-idempotency-key"] for r in invokes]
+        self.assertEqual(keys[0], keys[1])
+        self.assertEqual(State.uploads, uploads)
+        self.assertEqual(State.releases, 0)
+        for field in ("teamId", "userId", "mode", "uploadSessionId"):
+            bad = {**args, "input": {**args["input"], "nested": {field: "forbidden"}}}
+            self.assertEqual(json.loads(TOOLS.accounting_action(bad))["error"], "reman_agent_context_input_forbidden")
+        other = {**args, "tool_name": "accounting.payments.create"}
+        self.assertEqual(json.loads(TOOLS.accounting_action(other))["error"], "reman_agent_context_input_forbidden")
+        for mime in ("application/zip", "application/octet-stream"):
+            bad = json.loads(TOOLS.upload_file_base64({"sessionId": session, "fileName": "a.zip", "mimeType": mime, "contentBase64": "c3ludGhldGlj"}))
+            self.assertEqual(bad["error"], "reman_upload_input_invalid")
+        abandoned = json.loads(TOOLS.upload_session_create({}))["sessionId"]
+        self.assertNotIn("error", json.loads(TOOLS.upload_session_release({"sessionId": abandoned})))
 
     def test_generic_handlers_block_context_unapproved_file_and_large_input(self):
         forbidden = json.loads(TOOLS.prepare_accounting_action({
@@ -848,6 +882,7 @@ class ConnectorTest(unittest.TestCase):
         PLUGIN.register(Context())
         names = {item["name"] for item in registered}
         expected = {
+            "reman_agentic_upload_session_create", "reman_agentic_upload_file_base64", "reman_agentic_upload_session_release",
             "reman_available_tools", "reman_accounting_tool_contract", "reman_accounting_read",
             "reman_accounting_prepare_action", "reman_accounting_action", "reman_agentic_action_cancel",
             "reman_accounting_prepare_file_action", "reman_accounting_list_companies",

@@ -9,6 +9,31 @@ AVAILABLE_TOOLS = {
     "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
 }
 
+UPLOAD_SESSION_CREATE = {
+    "name": "reman_agentic_upload_session_create",
+    "description": "Create one governed session for accounting.attachments.add. Group files for the same target; new non-PDF formats require a new session and tax_commitment/tax_installment target.",
+    "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+}
+UPLOAD_FILE = {
+    "name": "reman_agentic_upload_file_base64",
+    "description": "Transfer original document bytes to a governed session. Non-PDF only for tax commitments/installments. Core verifies actual content, limits and scanner. Upload is not attachment completion; invoke accounting.attachments.add afterwards using reman_accounting_action.",
+    "parameters": {
+        "type": "object", "additionalProperties": False,
+        "properties": {
+            "sessionId": {"type": "string", "minLength": 1, "maxLength": 160},
+            "fileName": {"type": "string", "minLength": 1, "maxLength": 255},
+            "mimeType": {"type": "string", "enum": ["application/pdf", "message/rfc822", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.apple.pages", "application/vnd.apple.numbers", "image/jpeg", "image/png"]},
+            "contentBase64": {"type": "string", "minLength": 1, "maxLength": 27962028},
+        },
+        "required": ["sessionId", "fileName", "mimeType", "contentBase64"],
+    },
+}
+UPLOAD_SESSION_RELEASE = {
+    "name": "reman_agentic_upload_session_release",
+    "description": "Release an abandoned upload session before a pending action holds it. Do not release after uncertain invoke/transport failure.",
+    "parameters": {"type": "object", "properties": {"sessionId": {"type": "string", "minLength": 1, "maxLength": 160}}, "required": ["sessionId"], "additionalProperties": False},
+}
+
 INVOKE_ACCOUNTING_READ = {
     "name": "reman_accounting_read",
     "description": (
@@ -67,7 +92,7 @@ PREPARE_ACCOUNTING_ACTION = {
             "tool_name": {
                 "type": "string",
                 "pattern": "^accounting\\.[a-z0-9_.]+$",
-                "description": "Exact draft_with_confirmation Accounting tool returned by discovery, excluding the dedicated file tool.",
+                "description": "Exact draft_with_confirmation Accounting tool. accounting.attachments.add accepts a pre-uploaded uploadSessionId; invoice file creation still requires the dedicated handler.",
             },
             "input": {
                 "type": "object",

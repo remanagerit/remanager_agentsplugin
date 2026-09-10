@@ -167,7 +167,13 @@ DRAFT_CONTRACTS = {
         "inputStyle": "camelCase",
         "required": ["companyId", "targetType", "targetId", "pdf_paths", "operation_id"],
         "optional": ["description", "attachmentRole"],
-        "notes": "Use tool_name accounting.attachments.add; targetType: document|payment|delivery_note|tax_commitment|tax_installment|loan|loan_installment|insurance_policy; attaches 1..5 clean PDFs after user confirmation. For targetType tax_installment, attachmentRole is required by workflow: payment_form for F24/bollettino/payment form, receipt for payment receipt/quietance, general only for legacy generic installment attachments.",
+        "notes": "The dedicated file handler accepts local PDF paths only. Alternatively create/upload a governed session and call reman_accounting_action with tool_name accounting.attachments.add, operation_id and input {companyId,targetType,targetId,uploadSessionId,attachmentRole?}. Non-PDF formats only for tax_commitment/tax_installment when live filePolicy permits; other targets remain PDF-only. For tax_installment use payment_form for payment forms, receipt for receipts, general for generic attachments. Omit attachmentRole for tax_commitment. Always draft_with_confirmation.",
+        "preuploadedSessionContract": {
+            "connectorTool": "reman_accounting_action",
+            "required": ["companyId", "targetType", "targetId", "uploadSessionId"],
+            "optional": ["description", "attachmentRole"],
+            "operationIdField": "operation_id",
+        },
     },
 }
 
