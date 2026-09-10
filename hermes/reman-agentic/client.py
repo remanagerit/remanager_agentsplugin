@@ -79,6 +79,7 @@ APPROVED_ACCOUNTING_DRAFT_TOOLS = frozenset({
     "accounting.documents.mark_paid",
     "accounting.documents.mark_seen",
     "accounting.documents.set_projects_availability",
+    "accounting.documents.recalculate_self_invoice",
     "accounting.documents.unmark_paid",
     "accounting.documents.mark_unseen",
     "accounting.documents.update",
@@ -150,6 +151,16 @@ APPROVED_REMOTE_ERROR_CODES = frozenset({
     "accounting_agentic_stale_state",
     "accounting_agentic_total_size_exceeded",
     "accounting_invoice_duplicate",
+    "accounting_self_invoice_scope_denied",
+    "accounting_self_invoice_document_not_found",
+    "accounting_self_invoice_stale_state",
+    "accounting_self_invoice_origins_missing",
+    "accounting_self_invoice_limit_exceeded",
+    "accounting_self_invoice_xml_invalid",
+    "accounting_self_invoice_xml_ambiguous",
+    "accounting_self_invoice_xml_missing",
+    "accounting_self_invoice_type_unsupported",
+    "accounting_self_invoice_origins_not_settleable",
     "agentic_action_revalidation_denied",
     "agentic_idempotency_conflict",
     "agentic_idempotency_key_required",
@@ -329,7 +340,7 @@ class RemanClient:
         body = None if payload is None else json.dumps(payload, separators=(",", ":")).encode("utf-8")
         headers = {
             "Accept": "application/json",
-            "User-Agent": "Hermes-REman-Agentic/1.2.12",
+            "User-Agent": "Hermes-REman-Agentic/1.2.13",
             "X-REman-Agent-Token": self.token,
         }
         if body is not None:

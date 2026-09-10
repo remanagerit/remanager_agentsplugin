@@ -239,6 +239,13 @@ class Handler(BaseHTTPRequestHandler):
                 "expiresAt": "2026-07-20T12:00:00Z", "confirmationRequired": True,
                 "preview": {"attachmentCount": 1}, "inputSummary": {"companyId": 7},
             }, "idempotentReplay": False})
+        elif self.path.endswith("/accounting.documents.recalculate_self_invoice/invoke"):
+            if State.fail_next_invoke:
+                code = State.fail_next_invoke
+                State.fail_next_invoke = None
+                self._send(409 if code.endswith('stale_state') else 400, {"error": code})
+                return
+            self._send(200, {"result": {"status": "pending_confirmation", "actionId": "synthetic-recalc", "confirmationRequired": True}})
         elif self.path.endswith("/accounting.attachments.add/invoke"):
             self._send(200, {"result": {
                 "status": "pending_confirmation", "actionId": "action-attachment-1",
@@ -363,11 +370,32 @@ class ConnectorTest(unittest.TestCase):
             FILES.read_allowed_pdf(path, FILES.allowed_pdf_roots(), max_bytes=1024 * 1024, before_open=before_open)
         self.assertEqual(raised.exception.code, code)
 
-    def test_catalog_has_exact_92_tool_membership(self):
+    def test_self_invoice_recalculation_is_draft_only_and_retry_stable(self):
+        args = {"tool_name": "accounting.documents.recalculate_self_invoice", "input": {"companyId": 7, "documentId": 1}, "operation_id": "recalc-synthetic-1"}
+        for _ in range(2):
+            result = json.loads(TOOLS.accounting_action(args))
+            self.assertEqual(result["result"]["status"], "pending_confirmation")
+        requests = [r for r in State.requests if r[1].endswith('/accounting.documents.recalculate_self_invoice/invoke')]
+        self.assertEqual(len(requests), 2)
+        for request in requests:
+            self.assertEqual(request[2], {"mode": "draft_with_confirmation", "input": args["input"]})
+        self.assertEqual(*[{k.lower(): v for k, v in r[3].items()}["x-reman-idempotency-key"] for r in requests])
+        with self.assertRaises(CLIENT.RemanError):
+            CLIENT.RemanClient().invoke(args["tool_name"], "direct", args["input"], "synthetic-direct")
+        for code in ("accounting_self_invoice_xml_missing", "accounting_self_invoice_stale_state", "accounting_self_invoice_scope_denied"):
+            State.fail_next_invoke = code
+            error = json.loads(TOOLS.accounting_action(args))
+            self.assertEqual(error["error"], code)
+            self.assertFalse(error["retryable"])
+
+    def test_catalog_has_exact_93_tool_membership(self):
         self.assertEqual(len(CLIENT.APPROVED_ACCOUNTING_READ_TOOLS), 37)
-        self.assertEqual(len(CLIENT.APPROVED_ACCOUNTING_DRAFT_TOOLS), 55)
+        self.assertEqual(len(CLIENT.APPROVED_ACCOUNTING_DRAFT_TOOLS), 56)
         self.assertEqual(set(CATALOG.TOOL_CONTRACTS), CLIENT.APPROVED_ACCOUNTING_TOOLS)
-        self.assertEqual(len(CATALOG.TOOL_CONTRACTS), 92)
+        self.assertEqual(len(CATALOG.TOOL_CONTRACTS), 93)
+        recalc = CATALOG.contract_for("accounting.documents.recalculate_self_invoice")
+        self.assertEqual(recalc["required"], ["companyId", "documentId"])
+        self.assertEqual(recalc["mode"], "draft_with_confirmation")
         self.assertIn("accounting.bank_movements.import", CATALOG.TOOL_CONTRACTS)
         self.assertIn("accounting.documents.create_access_urls", CATALOG.TOOL_CONTRACTS)
         self.assertIn("accounting.documents.set_projects_availability", CATALOG.TOOL_CONTRACTS)
@@ -400,8 +428,8 @@ class ConnectorTest(unittest.TestCase):
         self.assertIn("must not invent its own conversion", readme)
         self.assertIn("--upgrade", readme)
         self.assertIn("restart the Hermes process", readme)
-        self.assertIn("version: 1.2.12", plugin_manifest)
-        self.assertIn('Hermes-REman-Agentic/1.2.12', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
+        self.assertIn("version: 1.2.13", plugin_manifest)
+        self.assertIn('Hermes-REman-Agentic/1.2.13', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
         self.assertIn("reman_accounting_action", plugin_manifest)
         self.assertIn("reman_agentic_action_cancel", plugin_manifest)
         self.assertIn("reman_agentic_action_cancel", readme)

@@ -182,6 +182,13 @@ The two URLs are separate capabilities. Do not open both automatically. Open or 
 - Claim read success only from a successful REmanager result.
 - Claim mutation completion only after REmanager reports the action as applied following user confirmation. Preparation alone is not completion.
 
+## Self-invoice settlement recalculation:
+- Use accounting.documents.recalculate_self_invoice version 1.1.0 with strict business input {companyId,documentId}; both IDs must be positive. One document per operation. Core permits direct only with all required grants/gates; otherwise use draft_with_confirmation. Hermes remains draft-only by connector policy. Do not claim paid from a pending response.
+- The server validates an eligible TD16/17/18/19 self-invoice and all linked origins, and may recover a missing fiscal type only from an authorized existing XML. No full XML reimport, provider-machine endpoint, force-paid action or unlink/relink fallback.
+- Successful apply reports companyId, documentId, fiscalDocumentType, status paid, settledByOrigin true, real paidAmount, residualAmount 0 and paymentsCreated 0. Dates, installments, IVA, amounts and actual allocations remain unchanged. Read back after approval.
+- Scope/document denial, missing/ambiguous/invalid XML, unsupported type, missing/unsettleable origins or limits must be reported without speculative retries. accounting_self_invoice_stale_state requires rereading and a new informed proposal; use stable idempotency for retries of the same unchanged operation.
+- Hermes: call reman_accounting_action with tool_name, input and a stable operation_id; this plugin still prepares a draft. MCP: use the discovered tool and its advertised idempotency control; default auto lets Core decide. Explicit direct requires discovery and local MCP direct permission; authorization denial is not retryable. Read back after successful direct execution or user-approved draft application.
+
 ## 1.2.12: pre-uploaded tax attachments
 
 Use reman_agentic_upload_session_create({}) to create a fresh accounting.attachments.add session. Upload original bytes with reman_agentic_upload_file_base64({sessionId,fileName,mimeType,contentBase64}). These helpers do not read local paths or expand filesystem access. The existing PDF file handlers and their allowed-root restrictions remain unchanged.

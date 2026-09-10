@@ -99,6 +99,7 @@ DRAFT_CONTRACTS = {
         "notes": "Use tool_name accounting.documents.create_with_attachments; pdf_paths must contain 1..5 regular PDFs below configured roots; supports other_expense and other document types; the agent cannot approve",
     },
     "accounting.documents.update": _contract("draft_with_confirmation", ("companyId", "entryId"), DOCUMENT_FIELDS),
+    "accounting.documents.recalculate_self_invoice": _contract("draft_with_confirmation", ("companyId", "documentId"), (), "Core tool 1.1.0 supports gated direct, but this Hermes connector remains draft-only and requires user confirmation. Recover fiscal type from an authorized existing XML when needed; recalculate only eligible self-invoices with settled linked origins. No payment created, no date/rate/IVA/paidAmount changes. Do not use full XML reimport or force-paid as fallback."),
     "accounting.documents.duplicate": _contract("draft_with_confirmation", ("companyId", "entryId")),
     "accounting.documents.mark_paid": _contract("draft_with_confirmation", ("companyId", "entryId"), ("excludeFromAccountBalance",)),
     "accounting.documents.set_projects_availability": _contract("draft_with_confirmation", ("companyId", "documentId", "available"), (), "Toggles whether one same-company document is visible to Projects/Impresa workflows. It does not assign a project, edit amounts, create payments, change document status or alter attachments"),
