@@ -92,6 +92,7 @@ def _safe_action_response(response):
         "status", "actionId", "expiresAt", "confirmationRequired", "preview", "inputSummary",
         "resourceSummary", "entryId", "companyId", "attachmentIds", "attachmentCount",
         "documentNumber", "documentDate", "warnings", "createdVia", "errorCode",
+        "documentId", "fiscalDocumentType", "settledByOrigin", "paidAmount", "residualAmount", "paymentsCreated",
     }
     return _compact({
         "result": {key: value for key, value in source.items() if key in allowed},
