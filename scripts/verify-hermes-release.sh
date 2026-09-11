@@ -52,6 +52,8 @@ class Context:
 
 plugin.register(Context())
 expected = {
+    "reman_agentic_upload_session_status",
+    "reman_document_archive_action",
     "reman_available_tools",
     "reman_accounting_tool_contract",
     "reman_accounting_read",
@@ -70,6 +72,7 @@ expected = {
 assert set(tools) == expected, tools
 assert not any(word in name for name in tools for word in ("delete", "direct", "mcp"))
 assert {name for name in tools if "upload" in name} == {
+    "reman_agentic_upload_session_status",
     "reman_agentic_upload_session_create",
     "reman_agentic_upload_file_base64",
     "reman_agentic_upload_session_release",
