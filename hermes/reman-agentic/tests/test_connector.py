@@ -25,6 +25,8 @@ TOOLS = importlib.import_module("reman_agentic_test_plugin.tools")
 
 
 class State:
+    archive_modes = None
+    archive_denial = None
     requests = []
     adversary_requests = []
     base_url = ""
@@ -57,7 +59,8 @@ def discovered_items():
         }
         for name in sorted(CLIENT.APPROVED_ACCOUNTING_DRAFT_TOOLS)
     ]
-    return read + drafts + [
+    archives = [{"name": name, "supportedModes": State.archive_modes} for name in sorted(CLIENT.APPROVED_ARCHIVE_TOOLS)] if State.archive_modes else []
+    return read + drafts + archives + [
         {"name": "accounting.settings.update", "supportedModes": ["direct"]},
         {"name": "tasks.search", "supportedModes": ["read"]},
     ]
@@ -107,7 +110,18 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         payload = self._json()
         State.requests.append(("POST", self.path, payload, dict(self.headers)))
-        if self.path.startswith("/api/v1/agentic/actions/") and self.path.endswith("/cancel"):
+        if any(self.path == "/api/v1/agentic/tools/" + name + "/invoke" for name in CLIENT.APPROVED_ARCHIVE_TOOLS):
+            if State.archive_denial:
+                self._send(403, {"error": State.archive_denial})
+                return
+            mode = payload["mode"]
+            effective = ("direct" if "direct" in State.archive_modes else "draft_with_confirmation") if mode == "auto" else mode
+            self._send(200, {"executionMode": effective, "result": {
+                "status": "created" if effective == "direct" else "pending_confirmation",
+                "linkIds": [1], "attachmentIds": [2], "actionId": "synthetic-action",
+                "path": "never-reflect-path", "token": "never-reflect-token"
+            }})
+        elif self.path.startswith("/api/v1/agentic/actions/") and self.path.endswith("/cancel"):
             State.cancels += 1
             action_id = self.path.split("/")[5]
             self._send(200, {"item": {"actionId": action_id, "status": "cancelled", "cancelledAt": "2026-09-03T10:00:00Z"}})
@@ -428,8 +442,8 @@ class ConnectorTest(unittest.TestCase):
         self.assertIn("must not invent its own conversion", readme)
         self.assertIn("--upgrade", readme)
         self.assertIn("restart the Hermes process", readme)
-        self.assertIn("version: 1.2.13", plugin_manifest)
-        self.assertIn('Hermes-REman-Agentic/1.2.13', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
+        self.assertIn("version: 1.2.14", plugin_manifest)
+        self.assertIn('Hermes-REman-Agentic/1.2.14', (PLUGIN_DIR / "client.py").read_text(encoding="utf-8"))
         self.assertIn("reman_accounting_action", plugin_manifest)
         self.assertIn("reman_agentic_action_cancel", plugin_manifest)
         self.assertIn("reman_agentic_action_cancel", readme)
@@ -595,6 +609,16 @@ class ConnectorTest(unittest.TestCase):
         self.assertEqual(result["error"], "reman_action_id_invalid")
         self.assertEqual(State.cancels, 0)
 
+    def test_upload_status_read_is_bounded_and_has_no_filenames(self):
+        for status in ("pending_scan", "ready"):
+            State.upload_status = status
+            result = json.loads(TOOLS.upload_session_status({"sessionId": "session-1"}))
+            self.assertEqual(result, {"sessionId": "session-1", "status": status, "items": [{"itemId": "item-1", "status": "clean" if status == "ready" else status}]})
+        State.upload_status = "consumed"
+        result = json.loads(TOOLS.upload_session_status({"sessionId": "session-1"}))
+        self.assertEqual(result["error"], "reman_upload_status_invalid")
+        State.upload_status = "ready"
+
     def test_preuploaded_attachment_draft_keeps_session_and_idempotency_without_reupload(self):
         session = json.loads(TOOLS.upload_session_create({}))["sessionId"]
         for mime in PLUGIN.schemas.UPLOAD_FILE["parameters"]["properties"]["mimeType"]["enum"]:
@@ -628,6 +652,53 @@ class ConnectorTest(unittest.TestCase):
             self.assertEqual(bad["error"], "reman_upload_input_invalid")
         abandoned = json.loads(TOOLS.upload_session_create({}))["sessionId"]
         self.assertNotIn("error", json.loads(TOOLS.upload_session_release({"sessionId": abandoned})))
+
+    def test_archive_scoped_discovery_auto_direct_and_stable_replay(self):
+        try:
+            State.archive_modes = ["draft_with_confirmation", "direct"]
+            for tool_name in sorted(CLIENT.APPROVED_ARCHIVE_TOOLS):
+                module = tool_name.split(".")[1]
+                session = json.loads(TOOLS.upload_session_create({"toolName": tool_name}))
+                self.assertNotIn("error", session)
+                create = State.requests[-1]
+                self.assertEqual(create[2], {"toolName": tool_name})
+                uploaded = json.loads(TOOLS.upload_file_base64({"toolName": tool_name, "sessionId": session["sessionId"], "fileName": "fixture.txt", "mimeType": "text/plain", "contentBase64": "dGVzdA=="}))
+                self.assertNotIn("error", uploaded)
+                self.assertNotIn("toolName", State.requests[-1][2])
+                data = {"contextModuleCode": module, "resourceType": {"administration": "company", "projects": "project", "real_estate": "unit"}[module], "resourceId": 1, "folderId": 2, "uploadSessionId": "11111111-1111-4111-8111-111111111111"}
+                args = {"tool_name": tool_name, "operation_id": "archive-" + module, "input": data}
+                for _ in range(2):
+                    result = json.loads(TOOLS.document_archive_action(args))
+                    self.assertEqual(result["executionMode"], "direct")
+                    self.assertEqual(result["result"]["linkIds"], [1])
+                    self.assertNotIn("never-reflect", json.dumps(result))
+                invokes = [r for r in State.requests if r[1].endswith(tool_name + "/invoke")]
+                self.assertEqual([r[2] for r in invokes], [{"mode": "auto", "input": data}] * 2)
+                keys = [{k.lower(): v for k, v in r[3].items()}["x-reman-idempotency-key"] for r in invokes]
+                self.assertEqual(keys[0], keys[1])
+                State.archive_denial = "agentic_direct_not_authorized"
+                denied = json.loads(TOOLS.document_archive_action({**args, "mode": "direct"}))
+                self.assertEqual(denied["error"], "agentic_direct_not_authorized")
+                self.assertFalse(denied["retryable"])
+                State.archive_denial = None
+                State.archive_modes = ["draft_with_confirmation"]
+                fallback = json.loads(TOOLS.document_archive_action(args))
+                self.assertEqual(fallback["executionMode"], "draft_with_confirmation")
+                denied = json.loads(TOOLS.document_archive_action({**args, "mode": "direct"}))
+                self.assertEqual(denied["error"], "reman_tool_mode_not_granted")
+                State.archive_modes = ["draft_with_confirmation", "direct"]
+                for field, value in (("teamId", 99), ("folderId", 0), ("resourceId", True), ("contextModuleCode", "bad"), ("uploadSessionId", "../bad")):
+                    bad = json.loads(TOOLS.document_archive_action({**args, "input": {**data, field: value}}))
+                    self.assertIn("error", bad)
+            self.assertEqual(State.releases, 0)
+            with self.assertRaises(CLIENT.RemanError):
+                CLIENT.RemanClient().invoke("accounting.payments.create", "direct", {}, "stable")
+            State.archive_modes = None
+            denied = json.loads(TOOLS.document_archive_action(args))
+            self.assertEqual(denied["error"], "reman_tool_not_granted_or_unavailable")
+        finally:
+            State.archive_modes = None
+            State.archive_denial = None
 
     def test_generic_handlers_block_context_unapproved_file_and_large_input(self):
         forbidden = json.loads(TOOLS.prepare_accounting_action({
@@ -910,6 +981,8 @@ class ConnectorTest(unittest.TestCase):
         PLUGIN.register(Context())
         names = {item["name"] for item in registered}
         expected = {
+            "reman_agentic_upload_session_status",
+            "reman_document_archive_action",
             "reman_agentic_upload_session_create", "reman_agentic_upload_file_base64", "reman_agentic_upload_session_release",
             "reman_available_tools", "reman_accounting_tool_contract", "reman_accounting_read",
             "reman_accounting_prepare_action", "reman_accounting_action", "reman_agentic_action_cancel",
@@ -925,8 +998,8 @@ class ConnectorTest(unittest.TestCase):
         os.environ.pop("REMAN_AGENT_ALLOWED_PDF_DIRS")
         self.assertFalse(file_tool["check_fn"]())
         self.assertFalse(generic_file_tool["check_fn"]())
-        self.assertEqual([item["name"] for item in skills], ["reman-accounting"])
-        self.assertTrue(skills[0]["path"].is_file())
+        self.assertEqual({item["name"] for item in skills}, {"reman-accounting", "reman-document-archives"})
+        self.assertTrue(all(item["path"].is_file() for item in skills))
 
 
 if __name__ == "__main__":

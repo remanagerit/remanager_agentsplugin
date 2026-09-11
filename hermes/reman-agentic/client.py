@@ -15,6 +15,11 @@ DEFAULT_REMAN_BASE_URL = "https://app.remanager.it"
 
 
 ACCOUNTING_TOOL_NAME = re.compile(r"^accounting\.[a-z0-9_.]+$")
+APPROVED_ARCHIVE_TOOLS = frozenset({
+    "documents.administration.attachments.add",
+    "documents.projects.attachments.add",
+    "documents.real_estate.attachments.add",
+})
 APPROVED_ACCOUNTING_READ_TOOLS = frozenset({
     "accounting.accounts.get",
     "accounting.accounts.search",
@@ -121,6 +126,11 @@ FILE_ACTION_TOOLS = frozenset({
 APPROVED_ACCOUNTING_TOOLS = APPROVED_ACCOUNTING_READ_TOOLS | APPROVED_ACCOUNTING_DRAFT_TOOLS
 REMOTE_ERROR_CODE = re.compile(r"^[a-z][a-z0-9_]{2,63}$")
 APPROVED_REMOTE_ERROR_CODES = frozenset({
+    "agentic_direct_not_authorized",
+    "document_archive_forbidden",
+    "document_archive_upload_not_ready",
+    "document_archive_replay_conflict",
+    "document_archive_invalid_file",
     "accounting_contact_not_found",
     "accounting_delivery_note_not_found",
     "accounting_document_ai_search_failed",
@@ -270,6 +280,8 @@ def _remote_error_details(failure, headers, code):
         details["retry_after"] = retry_after
     if isinstance(failure.get("retryable"), bool):
         details["retryable"] = failure["retryable"]
+    if code == "agentic_direct_not_authorized":
+        details["retryable"] = False
     return details
 
 
@@ -340,7 +352,7 @@ class RemanClient:
         body = None if payload is None else json.dumps(payload, separators=(",", ":")).encode("utf-8")
         headers = {
             "Accept": "application/json",
-            "User-Agent": "Hermes-REman-Agentic/1.2.13",
+            "User-Agent": "Hermes-REman-Agentic/1.2.14",
             "X-REman-Agent-Token": self.token,
         }
         if body is not None:
@@ -390,9 +402,11 @@ class RemanClient:
                 continue
             name = item["name"]
             supported = item.get("supportedModes")
-            if not ACCOUNTING_TOOL_NAME.fullmatch(name) or name not in APPROVED_ACCOUNTING_TOOLS or not isinstance(supported, list):
+            if name not in APPROVED_ACCOUNTING_TOOLS | APPROVED_ARCHIVE_TOOLS or not isinstance(supported, list):
                 continue
             modes = []
+            if name in APPROVED_ARCHIVE_TOOLS:
+                modes = [mode for mode in ("draft_with_confirmation", "direct") if mode in supported]
             if name in APPROVED_ACCOUNTING_READ_TOOLS and "read" in supported:
                 modes.append("read")
             if name in APPROVED_ACCOUNTING_DRAFT_TOOLS and "draft_with_confirmation" in supported:
@@ -403,7 +417,9 @@ class RemanClient:
         return sanitized
 
     def require_tool(self, tool_name, mode):
-        if mode == "read":
+        if tool_name in APPROVED_ARCHIVE_TOOLS and mode in {"auto", "draft_with_confirmation", "direct"}:
+            approved = APPROVED_ARCHIVE_TOOLS
+        elif mode == "read":
             approved = APPROVED_ACCOUNTING_READ_TOOLS
         elif mode == "draft_with_confirmation":
             approved = APPROVED_ACCOUNTING_DRAFT_TOOLS
@@ -415,13 +431,16 @@ class RemanClient:
         tool = next((item for item in discovery.get("items", []) if item.get("name") == tool_name), None)
         if not tool:
             raise RemanError("reman_tool_not_granted_or_unavailable")
-        if mode not in tool.get("supportedModes", []):
+        if mode == "auto" and tool_name in APPROVED_ARCHIVE_TOOLS:
+            if not any(value in tool.get("supportedModes", []) for value in ("draft_with_confirmation", "direct")):
+                raise RemanError("reman_tool_mode_not_granted")
+        elif mode not in tool.get("supportedModes", []):
             raise RemanError("reman_tool_mode_not_granted")
         return tool
 
     def invoke(self, tool_name, mode, input_data, idempotency_key=None):
         self.require_tool(tool_name, mode)
-        if mode == "draft_with_confirmation" and not idempotency_key:
+        if mode != "read" and not idempotency_key:
             raise RemanError("reman_idempotency_key_required")
         return self._request(
             "POST",
@@ -431,8 +450,8 @@ class RemanClient:
         )
 
     def create_upload_session(self, tool_name):
-        self.require_tool(tool_name, "draft_with_confirmation")
-        if tool_name not in FILE_ACTION_TOOLS:
+        self.require_tool(tool_name, "auto" if tool_name in APPROVED_ARCHIVE_TOOLS else "draft_with_confirmation")
+        if tool_name not in FILE_ACTION_TOOLS | APPROVED_ARCHIVE_TOOLS:
             raise RemanError("reman_upload_tool_not_approved")
         return self._request("POST", "/api/v1/agentic/uploads/sessions", {"toolName": tool_name})
 

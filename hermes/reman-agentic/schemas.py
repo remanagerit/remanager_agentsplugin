@@ -1,5 +1,37 @@
 """Schemas exposed to the Hermes model."""
 
+ARCHIVE_TOOL_NAMES = [
+    "documents.administration.attachments.add",
+    "documents.projects.attachments.add",
+    "documents.real_estate.attachments.add",
+]
+
+DOCUMENT_ARCHIVE_ACTION = {
+    "name": "reman_document_archive_action",
+    "description": "Attach originals to a verified existing company/project/property/unit archive folder. Read reman-document-archives skill. Default auto delegates draft/direct to Core; direct requires live discovery/grants. Not an Accounting entry attachment. Reuse operation_id/session after uncertain invoke.",
+    "parameters": {
+        "type": "object", "additionalProperties": False,
+        "properties": {
+            "tool_name": {"type": "string", "enum": ARCHIVE_TOOL_NAMES},
+            "operation_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+            "mode": {"type": "string", "enum": ["auto", "draft_with_confirmation", "direct"], "default": "auto"},
+            "input": {
+                "type": "object", "additionalProperties": False,
+                "properties": {
+                    "contextModuleCode": {"type": "string", "enum": ["administration", "projects", "real_estate"]},
+                    "resourceType": {"type": "string", "enum": ["company", "project", "property", "unit"]},
+                    "resourceId": {"type": "integer", "minimum": 1},
+                    "folderId": {"type": "integer", "minimum": 1},
+                    "uploadSessionId": {"type": "string", "format": "uuid"},
+                    "description": {"type": "string", "maxLength": 1000},
+                },
+                "required": ["contextModuleCode", "resourceType", "resourceId", "folderId", "uploadSessionId"],
+            },
+        },
+        "required": ["tool_name", "operation_id", "input"],
+    },
+}
+
 AVAILABLE_TOOLS = {
     "name": "reman_available_tools",
     "description": (
@@ -11,18 +43,19 @@ AVAILABLE_TOOLS = {
 
 UPLOAD_SESSION_CREATE = {
     "name": "reman_agentic_upload_session_create",
-    "description": "Create one governed session for accounting.attachments.add. Group files for the same target; new non-PDF formats require a new session and tax_commitment/tax_installment target.",
-    "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+    "description": "Create a governed session. Defaults to accounting.attachments.add; specify the exact scoped archive toolName for document archives. Group only the same target/folder; respect live filePolicy.",
+    "parameters": {"type": "object", "properties": {"toolName": {"type": "string", "enum": ["accounting.attachments.add", *ARCHIVE_TOOL_NAMES]}}, "additionalProperties": False},
 }
 UPLOAD_FILE = {
     "name": "reman_agentic_upload_file_base64",
-    "description": "Transfer original document bytes to a governed session. Non-PDF only for tax commitments/installments. Core verifies actual content, limits and scanner. Upload is not attachment completion; invoke accounting.attachments.add afterwards using reman_accounting_action.",
+    "description": "Transfer originals to a governed session. Non-PDF for tax commitments/installments or scoped archive tools only. Specify matching toolName for archives. Core verifies content, 20 MiB file cap, effective limits and scanner. Upload is not association completion.",
     "parameters": {
         "type": "object", "additionalProperties": False,
         "properties": {
+            "toolName": {"type": "string", "enum": ["accounting.attachments.add", *ARCHIVE_TOOL_NAMES]},
             "sessionId": {"type": "string", "minLength": 1, "maxLength": 160},
             "fileName": {"type": "string", "minLength": 1, "maxLength": 255},
-            "mimeType": {"type": "string", "enum": ["application/pdf", "message/rfc822", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.apple.pages", "application/vnd.apple.numbers", "image/jpeg", "image/png"]},
+            "mimeType": {"type": "string", "enum": ["application/pdf", "message/rfc822", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.apple.pages", "application/vnd.apple.numbers", "image/jpeg", "image/png", "text/plain", "application/xml", "application/pkcs7-mime", "image/vnd.dwg", "image/vnd.dxf", "image/vnd.adobe.photoshop", "application/x-step", "application/vnd.adobe.indesign-idml-package"]},
             "contentBase64": {"type": "string", "minLength": 1, "maxLength": 27962028},
         },
         "required": ["sessionId", "fileName", "mimeType", "contentBase64"],
@@ -32,6 +65,12 @@ UPLOAD_SESSION_RELEASE = {
     "name": "reman_agentic_upload_session_release",
     "description": "Release an abandoned upload session before a pending action holds it. Do not release after uncertain invoke/transport failure.",
     "parameters": {"type": "object", "properties": {"sessionId": {"type": "string", "minLength": 1, "maxLength": 160}}, "required": ["sessionId"], "additionalProperties": False},
+}
+
+UPLOAD_SESSION_STATUS = {
+    "name": "reman_agentic_upload_session_status",
+    "description": "Read only session and item scan states, without filenames. Poll with backoff; ready plus all clean is required. Not found does not mean completed: Core can hide terminal/expired sessions.",
+    "parameters": {"type": "object", "additionalProperties": False, "properties": {"sessionId": {"type": "string", "minLength": 1, "maxLength": 160}}, "required": ["sessionId"]},
 }
 
 INVOKE_ACCOUNTING_READ = {

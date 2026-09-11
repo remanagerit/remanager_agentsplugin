@@ -29,6 +29,7 @@ SOURCE_FILES = (
     "install.sh",
     "uninstall.sh",
     "skills/reman-accounting/SKILL.md",
+    "skills/reman-document-archives/SKILL.md",
 )
 LOCAL_PATH_PATTERNS = (b"/Users/", b"/home/", b"/private/tmp/", b"C:\\Users\\")
 

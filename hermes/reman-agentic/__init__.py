@@ -17,12 +17,19 @@ def _configured_for_files():
 
 def register(ctx):
     ctx.register_skill(
+        name="reman-document-archives",
+        path=Path(__file__).resolve().parent / "skills" / "reman-document-archives" / "SKILL.md",
+        description="Upload originals into scoped company/project/property/unit archives with Core-authorized draft or direct execution.",
+    )
+    ctx.register_skill(
         name="reman-accounting",
         path=Path(__file__).resolve().parent / "skills" / "reman-accounting" / "SKILL.md",
         description="Governed REmanager Accounting read and user-confirmed action workflows.",
     )
     definitions = (
         (schemas.UPLOAD_SESSION_CREATE, tools.upload_session_create, _configured, ["REMAN_AGENT_TOKEN"]),
+        (schemas.UPLOAD_SESSION_STATUS, tools.upload_session_status, _configured, ["REMAN_AGENT_TOKEN"]),
+        (schemas.DOCUMENT_ARCHIVE_ACTION, tools.document_archive_action, _configured, ["REMAN_AGENT_TOKEN"]),
         (schemas.UPLOAD_FILE, tools.upload_file_base64, _configured, ["REMAN_AGENT_TOKEN"]),
         (schemas.UPLOAD_SESSION_RELEASE, tools.upload_session_release, _configured, ["REMAN_AGENT_TOKEN"]),
         (schemas.AVAILABLE_TOOLS, tools.available_tools, _configured, ["REMAN_AGENT_TOKEN"]),

@@ -6,10 +6,12 @@ import os
 import re
 import tempfile
 import time
+import uuid
 from pathlib import Path
 
 from .catalog import TOOL_CONTRACTS, contract_for
 from .client import (
+    APPROVED_ARCHIVE_TOOLS,
     APPROVED_ACCOUNTING_DRAFT_TOOLS,
     APPROVED_ACCOUNTING_READ_TOOLS,
     FILE_ACTION_TOOLS,
@@ -164,13 +166,64 @@ def accounting_action(args, **kwargs):
     return prepare_accounting_action(args, **kwargs)
 
 
+def document_archive_action(args, **kwargs):
+    def run():
+        if set(args) - {"tool_name", "operation_id", "mode", "input"}:
+            raise RemanError("reman_agent_context_input_forbidden")
+        tool_name = args.get("tool_name")
+        if tool_name not in APPROVED_ARCHIVE_TOOLS:
+            raise RemanError("reman_tool_not_approved_by_connector")
+        data = args.get("input")
+        required = {"contextModuleCode", "resourceType", "resourceId", "folderId", "uploadSessionId"}
+        if not isinstance(data, dict) or not required.issubset(data) or set(data) - (required | {"description"}):
+            raise RemanError("reman_archive_input_invalid")
+        module = tool_name.split(".")[1]
+        types = {"administration": {"company"}, "projects": {"project"}, "real_estate": {"property", "unit"}}
+        if data["contextModuleCode"] != module or data["resourceType"] not in types[module]:
+            raise RemanError("reman_archive_input_invalid")
+        for key in ("resourceId", "folderId"):
+            if type(data[key]) is not int or not 0 < data[key] <= 9007199254740991:
+                raise RemanError("reman_archive_input_invalid")
+        session_id = data["uploadSessionId"]
+        try:
+            if not isinstance(session_id, str) or str(uuid.UUID(session_id)) != session_id.lower():
+                raise ValueError()
+        except (ValueError, AttributeError):
+            raise RemanError("reman_upload_input_invalid") from None
+        if "description" in data and (not isinstance(data["description"], str) or len(data["description"]) > 1000):
+            raise RemanError("reman_archive_input_invalid")
+        mode = args.get("mode", "auto")
+        if mode not in {"auto", "draft_with_confirmation", "direct"}:
+            raise RemanError("reman_execution_mode_invalid")
+        key = _idempotency_key(tool_name, data, _operation_id(args.get("operation_id")))
+        response = RemanClient().invoke(tool_name, mode, data, key)
+        result = _safe_action_response(response)
+        source = response.get("result", {}) if isinstance(response, dict) else {}
+        if isinstance(source, dict) and isinstance(source.get("linkIds"), list):
+            result.setdefault("result", {})["linkIds"] = [value for value in source["linkIds"] if type(value) is int and value > 0][:5]
+        execution_mode = response.get("executionMode") if isinstance(response, dict) else None
+        if execution_mode in {"draft_with_confirmation", "direct"}:
+            result["executionMode"] = execution_mode
+        return result
+    return _ok(run)
+
+
+def _upload_tool(args):
+    tool_name = args.get("toolName", "accounting.attachments.add")
+    if tool_name not in {"accounting.attachments.add", *APPROVED_ARCHIVE_TOOLS}:
+        raise RemanError("reman_upload_tool_not_approved")
+    return tool_name
+
+
 def upload_session_create(args, **kwargs):
-    return _ok(lambda: RemanClient().create_upload_session("accounting.attachments.add"))
+    return _ok(lambda: RemanClient().create_upload_session(_upload_tool(args)))
 
 
 def upload_file_base64(args, **kwargs):
     def run():
         for name, definition in UPLOAD_FILE["parameters"]["properties"].items():
+            if name not in UPLOAD_FILE["parameters"]["required"] and name not in args:
+                continue
             value = args.get(name)
             if not isinstance(value, str) or not value or len(value) > definition.get("maxLength", 255):
                 raise RemanError("reman_upload_input_invalid")
@@ -179,7 +232,8 @@ def upload_file_base64(args, **kwargs):
         if not ACTION_ID.fullmatch(args["sessionId"]):
             raise RemanError("reman_upload_input_invalid")
         client = RemanClient()
-        client.require_tool("accounting.attachments.add", "draft_with_confirmation")
+        tool_name = _upload_tool(args)
+        client.require_tool(tool_name, "auto" if tool_name in APPROVED_ARCHIVE_TOOLS else "draft_with_confirmation")
         return client.upload_file_base64(args["sessionId"], args["fileName"], args["mimeType"], args["contentBase64"])
     return _ok(run)
 
@@ -190,6 +244,26 @@ def upload_session_release(args, **kwargs):
         if not isinstance(session_id, str) or not ACTION_ID.fullmatch(session_id):
             raise RemanError("reman_upload_input_invalid")
         return RemanClient().release_upload_session(session_id)
+    return _ok(run)
+
+
+def upload_session_status(args, **kwargs):
+    def run():
+        session_id = args.get("sessionId")
+        if not isinstance(session_id, str) or not ACTION_ID.fullmatch(session_id):
+            raise RemanError("reman_upload_input_invalid")
+        session = RemanClient().get_upload_session(session_id)
+        if not isinstance(session, dict) or session.get("status") not in {"uploaded", "pending_scan", "ready"}:
+            raise RemanError("reman_upload_status_invalid")
+        items = session.get("items")
+        if not isinstance(items, list) or len(items) > 5:
+            raise RemanError("reman_upload_status_invalid")
+        safe_items = []
+        for item in items:
+            if not isinstance(item, dict) or not isinstance(item.get("itemId"), str) or not ACTION_ID.fullmatch(item["itemId"]) or item.get("status") not in {"uploaded", "pending_scan", "clean", "rejected", "quarantined", "consumed"}:
+                raise RemanError("reman_upload_status_invalid")
+            safe_items.append({"itemId": item["itemId"], "status": item["status"]})
+        return {"sessionId": session_id, "status": session["status"], "items": safe_items}
     return _ok(run)
 
 
